@@ -81,7 +81,13 @@ export class CartController {
                   discountedPrice: true,
                   discountPercent: true,
                   stock: true,
-                  categoryId: true,
+                   categoryId: true,
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
                   images: {
                     where: { isDefault: true },
                     select: { id: true, url: true, altText: true, isDefault: true },

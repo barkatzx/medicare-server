@@ -194,7 +194,10 @@ export class UserController {
           console.log(`[Cache] DELETED ${keys.length} keys for user ${userId}`);
         }
       } catch (redisError) {
-        console.error("Redis Cache Invalidation Error on Profile Delete:", redisError);
+        console.error(
+          "Redis Cache Invalidation Error on Profile Delete:",
+          redisError,
+        );
       }
 
       res.status(200).json({ message: "User profile deleted successfully" });
@@ -239,7 +242,7 @@ export class UserController {
   // Get all users (admin only)
   static async getAllUsers(req: AuthRequest, res: Response) {
     try {
-      const { page = 1, limit = 10, role, isApproved } = req.query;
+      const { page = 1, limit = 20, role, isApproved } = req.query; // ← limit default: 10 → 20
 
       const where: Record<string, any> = {};
 
@@ -256,6 +259,9 @@ export class UserController {
         where.isApproved = isApproved === "true";
       }
 
+      const pageNum = Number(page);
+      const limitNum = Number(limit);
+
       const [users, total] = await prisma.$transaction([
         prisma.user.findMany({
           where,
@@ -269,22 +275,26 @@ export class UserController {
             isApproved: true,
             createdAt: true,
           },
-          skip: (Number(page) - 1) * Number(limit),
-          take: Number(limit),
+          skip: (pageNum - 1) * limitNum,
+          take: limitNum,
           orderBy: { createdAt: "desc" },
         }),
         prisma.user.count({ where }),
       ]);
+
+      const totalPages = Math.ceil(total / limitNum);
 
       res.status(200).json({
         message: "Users fetched successfully",
         data: {
           users,
           pagination: {
-            page: Number(page),
-            limit: Number(limit),
+            page: pageNum,
+            limit: limitNum,
             total,
-            pages: Math.ceil(total / Number(limit)),
+            pages: totalPages,
+            hasNextPage: pageNum < totalPages,
+            hasPrevPage: pageNum > 1,
           },
         },
       });
