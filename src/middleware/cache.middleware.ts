@@ -9,7 +9,7 @@ const inFlightRequests = new Map<string, Promise<any>>();
  * Middleware to cache route responses
  * @param ttlSeconds Time to live in seconds
  */
-export const cacheRoute = (ttlSeconds: number) => {
+export const cacheRoute = (ttlSeconds: number, cacheVersion?: string) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     // Only cache GET requests
     if (req.method !== "GET") {
@@ -17,7 +17,8 @@ export const cacheRoute = (ttlSeconds: number) => {
     }
 
     const userId = req.user?.id || "public";
-    const key = `cache:${userId}:${req.originalUrl}`;
+    const versionSuffix = cacheVersion ? `:${cacheVersion}` : "";
+    const key = `cache:${userId}:${req.originalUrl}${versionSuffix}`;
 
     try {
       // 1. Check Redis
@@ -55,7 +56,9 @@ export const cacheRoute = (ttlSeconds: number) => {
       res.json = (body: any) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           const valueToCache = typeof body === "string" ? body : JSON.stringify(body);
-          redisClient.setex(key, ttlSeconds, valueToCache);
+          redisClient
+            .setex(key, ttlSeconds, valueToCache)
+            .catch((error) => console.error("Redis Cache Write Error:", error));
         }
         
         // Resolve the in-flight promise and cleanup

@@ -1,6 +1,6 @@
 // src/services/sales.service.ts
 import { prisma } from "../config/supabase";
-import { OrderStatus, PaymentStatus } from "@prisma/client";
+import { OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
 
 export interface SalesData {
   totalSales: number;
@@ -157,13 +157,12 @@ export class SalesService {
   }
 
   /**
-   * Get shipped, confirmed, and delivered sales from the last 7 local calendar days.
+   * Get shipped and delivered sales from the last 7 local calendar days.
    */
   static async getWeeklySales(): Promise<TimeRangeSales[]> {
     const now = new Date();
     return this.getSalesByStatusByDay(now, 7, [
       OrderStatus.shipped,
-      OrderStatus.confirmed,
       OrderStatus.delivered,
     ]);
   }
@@ -314,145 +313,215 @@ export class SalesService {
       topCategories: any[];
     }
   > {
-    const allTimeData = await this.getSalesData(
-      new Date(0), // From beginning of time
-      new Date(), // Until now
-    );
-
-    // Get unique customers who made purchases
-    const uniqueCustomers = await prisma.order.findMany({
-      where: {
-        status: { not: "cancelled" },
-        payment: { status: "paid" },
-      },
-      select: {
-        userId: true,
-      },
-      distinct: ["userId"],
-    });
-
-    // Get top 10 selling products
-    const topProducts = await prisma.orderItem.groupBy({
-      by: ["productId"],
-      _sum: {
-        quantity: true,
-      },
-      orderBy: {
-        _sum: {
-          quantity: "desc",
-        },
-      },
-      take: 10,
-    });
-
-    const productsWithDetails = await Promise.all(
-      topProducts.map(async (item) => {
-        const product = await prisma.product.findUnique({
-          where: { id: item.productId },
-          select: {
-            id: true,
-            name: true,
-            price: true,
-            images: {
-              take: 1,
-              select: {
-                url: true,
-              },
-            },
-          },
-        });
-        return {
-          ...product,
-          totalSold: item._sum.quantity,
-        };
-      }),
-    );
-
-    // Get top categories by sales
-    const topCategories = await prisma.orderItem.groupBy({
-      by: ["productId"],
-      _sum: {
-        quantity: true,
-      },
-    });
-
-    const categorySales: { [key: string]: number } = {};
-    for (const item of topCategories) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        select: { categoryId: true },
-      });
-      if (product) {
-        categorySales[product.categoryId] =
-          (categorySales[product.categoryId] || 0) + (item._sum.quantity || 0);
-      }
-    }
-
-    const categoriesWithDetails = await Promise.all(
-      Object.entries(categorySales)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(async ([categoryId, totalSold]) => {
-          const category = await prisma.category.findUnique({
-            where: { id: categoryId },
-            select: {
-              id: true,
-              name: true,
-            },
-          });
-          return {
-            ...category,
-            totalSold,
-          };
-        }),
-    );
+    const [
+      allTimeData,
+      totalCustomers,
+      productsWithDetails,
+      categoriesWithDetails,
+    ] =
+      await Promise.all([
+        this.getSummarySalesData(),
+        this.getUniqueCustomerCount(),
+        this.getTopProductsBySales(),
+        this.getTopCategoriesBySales(),
+      ]);
 
     return {
       ...allTimeData,
-      totalCustomers: uniqueCustomers.length,
+      totalCustomers,
       topProducts: productsWithDetails,
       topCategories: categoriesWithDetails,
     };
   }
 
+  private static async getUniqueCustomerCount(): Promise<number> {
+    const [result] = await prisma.$queryRaw<
+      Array<{ totalCustomers: number }>
+    >(Prisma.sql`
+      SELECT COUNT(DISTINCT o."userId")::int AS "totalCustomers"
+      FROM "Order" o
+      INNER JOIN "Payment" payment ON payment."orderId" = o."id"
+      WHERE o."status" <> ${OrderStatus.cancelled}::"OrderStatus"
+        AND payment."status" = ${PaymentStatus.paid}::"PaymentStatus"
+    `);
+    return result.totalCustomers;
+  }
+
+  private static async getSummarySalesData(): Promise<SalesData> {
+    const startDate = new Date(0);
+    const endDate = new Date();
+    const eligibleOrderFilter = {
+      createdAt: {
+        gte: startDate,
+        lte: endDate,
+      },
+      status: {
+        not: OrderStatus.cancelled,
+      },
+      payment: {
+        status: PaymentStatus.paid,
+      },
+    };
+
+    const [orderTotals, itemTotals, discountTotal] = await Promise.all([
+      prisma.order.aggregate({
+        where: eligibleOrderFilter,
+        _sum: {
+          totalAmount: true,
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+      prisma.orderItem.aggregate({
+        where: {
+          order: eligibleOrderFilter,
+        },
+        _sum: {
+          quantity: true,
+        },
+      }),
+      prisma.$queryRaw<Array<{ totalDiscounts: Prisma.Decimal | null }>>(
+        Prisma.sql`
+          SELECT SUM(
+            CASE
+              WHEN p."price" > oi."price"
+              THEN (p."price" - oi."price") * oi."quantity"
+              ELSE 0
+            END
+          ) AS "totalDiscounts"
+          FROM "OrderItem" oi
+          INNER JOIN "Order" o ON o."id" = oi."orderId"
+          INNER JOIN "Payment" payment ON payment."orderId" = o."id"
+          INNER JOIN "Product" p ON p."id" = oi."productId"
+          WHERE o."createdAt" >= ${startDate}
+            AND o."createdAt" <= ${endDate}
+            AND o."status" <> ${OrderStatus.cancelled}::"OrderStatus"
+            AND payment."status" = ${PaymentStatus.paid}::"PaymentStatus"
+        `,
+      ),
+    ]);
+
+    const totalSales = Number(orderTotals._sum.totalAmount ?? 0);
+    const totalOrders = orderTotals._count._all;
+    const totalDiscounts = Number(discountTotal[0]?.totalDiscounts ?? 0);
+
+    return {
+      totalSales,
+      totalOrders,
+      averageOrderValue: totalOrders > 0 ? totalSales / totalOrders : 0,
+      totalItemsSold: itemTotals._sum.quantity ?? 0,
+      totalDiscounts,
+    };
+  }
+
+  private static async getTopProductsBySales(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      price: Prisma.Decimal;
+      images: Array<{ url: string }>;
+      totalSold: number;
+    }>
+  > {
+    const products = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        name: string;
+        price: Prisma.Decimal;
+        imageUrl: string | null;
+        totalSold: number;
+      }>
+    >(Prisma.sql`
+      SELECT
+        p."id",
+        p."name",
+        p."price",
+        (
+          SELECT pi."url"
+          FROM "ProductImage" pi
+          WHERE pi."productId" = p."id"
+          ORDER BY pi."createdAt"
+          LIMIT 1
+        ) AS "imageUrl",
+        SUM(oi."quantity")::double precision AS "totalSold"
+      FROM "OrderItem" oi
+      INNER JOIN "Product" p ON p."id" = oi."productId"
+      GROUP BY p."id", p."name", p."price"
+      ORDER BY SUM(oi."quantity") DESC
+      LIMIT 10
+    `);
+
+    return products.map(({ imageUrl, ...product }) => ({
+      ...product,
+      images: imageUrl ? [{ url: imageUrl }] : [],
+    }));
+  }
+
+  private static async getTopCategoriesBySales(): Promise<
+    Array<{ id: string; name: string; totalSold: number }>
+  > {
+    return prisma.$queryRaw<
+      Array<{ id: string; name: string; totalSold: number }>
+    >(Prisma.sql`
+      SELECT
+        c."id",
+        c."name",
+        SUM(oi."quantity")::double precision AS "totalSold"
+      FROM "OrderItem" oi
+      INNER JOIN "Product" p ON p."id" = oi."productId"
+      INNER JOIN "Category" c ON c."id" = p."categoryId"
+      GROUP BY c."id", c."name"
+      ORDER BY SUM(oi."quantity") DESC
+      LIMIT 5
+    `);
+  }
+
   /**
    * Get sales by status
    */
-  static async getSalesByStatus(): Promise<any> {
-    const statuses = [
-      "pending",
-      "confirmed",
-      "processing",
-      "shipped",
-      "delivered",
-      "cancelled",
+  static async getSalesByStatus(): Promise<
+    Array<{ status: OrderStatus; totalSales: number; totalOrders: number }>
+  > {
+    const statuses: OrderStatus[] = [
+      OrderStatus.pending,
+      OrderStatus.confirmed,
+      OrderStatus.processing,
+      OrderStatus.shipped,
+      OrderStatus.delivered,
+      OrderStatus.cancelled,
     ];
-    const salesByStatus = [];
-
-    for (const status of statuses) {
-      const orders = await prisma.order.findMany({
-        where: {
-          status: status as OrderStatus,
-          payment: {
-            status: "paid",
-          },
+    const dateRange = {
+      gte: new Date(0),
+      lte: new Date(),
+    };
+    const ordersByStatus = await prisma.order.groupBy({
+      by: ["status"],
+      where: {
+        createdAt: dateRange,
+        status: {
+          in: statuses,
         },
-      });
+      },
+      _sum: {
+        totalAmount: true,
+      },
+      _count: {
+        _all: true,
+      },
+    });
 
-      const totalSales = orders.reduce(
-        (sum, order) => sum + Number(order.totalAmount),
-        0,
-      );
-      const totalOrders = orders.length;
-
-      salesByStatus.push({
+    const statusTotals = new Map(
+      ordersByStatus.map((group) => [group.status, group]),
+    );
+    return statuses.map((status) => {
+      const totals = statusTotals.get(status);
+      return {
         status,
-        totalSales,
-        totalOrders,
-      });
-    }
-
-    return salesByStatus;
+        totalSales: Number(totals?._sum.totalAmount ?? 0),
+        totalOrders: totals?._count._all ?? 0,
+      };
+    });
   }
 
   /**
@@ -502,59 +571,133 @@ export class SalesService {
     monthly: number;
     yearly: number;
   }> {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
 
-    const lastWeek = new Date(today);
-    lastWeek.setDate(today.getDate() - 7);
+    const dailyStatuses = [OrderStatus.pending, OrderStatus.confirmed];
+    const weeklyStatuses = [OrderStatus.shipped, OrderStatus.delivered];
+    const deliveredStatuses = [OrderStatus.delivered];
+    const statusFilter = (statuses: OrderStatus[]) =>
+      Prisma.join(
+        statuses.map((status) => Prisma.sql`${status}::"OrderStatus"`),
+      );
 
-    const lastMonth = new Date(today);
-    lastMonth.setMonth(today.getMonth() - 1);
+    const weeklyStart = new Date(now);
+    weeklyStart.setHours(0, 0, 0, 0);
+    weeklyStart.setDate(weeklyStart.getDate() - 6);
+    const previousWeeklyStart = this.getPeriodStart(weeklyStart, "days", 7);
 
-    const lastYear = new Date(today);
-    lastYear.setFullYear(today.getFullYear() - 1);
+    const monthlyStart = new Date(now);
+    monthlyStart.setHours(0, 0, 0, 0);
+    monthlyStart.setDate(monthlyStart.getDate() - 29);
+    const previousMonthlyStart = this.getPeriodStart(monthlyStart, "days", 30);
 
-    const todaySales = await this.getDailySalesForDate(today);
-    const yesterdaySales = await this.getDailySalesForDate(yesterday);
+    const yearlyStart = this.getPeriodStart(now, "years", 1);
+    const previousYearlyStart = this.getPeriodStart(yearlyStart, "years", 1);
+    const previousYearlyEnd = new Date(yearlyStart.getTime() - 1);
 
-    const thisWeekSales = await this.getSalesData(lastWeek, today);
-    const lastWeekSales = await this.getSalesData(
-      new Date(lastWeek.getTime() - 7 * 24 * 60 * 60 * 1000),
-      lastWeek,
-    );
-
-    const thisMonthSales = await this.getSalesData(lastMonth, today);
-    const lastMonthSales = await this.getSalesData(
-      new Date(lastMonth.getTime() - 30 * 24 * 60 * 60 * 1000),
-      lastMonth,
-    );
-
-    const thisYearSales = await this.getSalesData(lastYear, today);
-    const lastYearSales = await this.getSalesData(
-      new Date(lastYear.getTime() - 365 * 24 * 60 * 60 * 1000),
-      lastYear,
-    );
+    const [totals] = await prisma.$queryRaw<
+      Array<{
+        dailyCurrent: Prisma.Decimal | null;
+        dailyPrevious: Prisma.Decimal | null;
+        weeklyCurrent: Prisma.Decimal | null;
+        weeklyPrevious: Prisma.Decimal | null;
+        monthlyCurrent: Prisma.Decimal | null;
+        monthlyPrevious: Prisma.Decimal | null;
+        yearlyCurrent: Prisma.Decimal | null;
+        yearlyPrevious: Prisma.Decimal | null;
+      }>
+    >(Prisma.sql`
+      SELECT
+        SUM(CASE
+          WHEN o."createdAt" >= ${startOfToday}
+            AND o."createdAt" <= ${now}
+            AND o."status" IN (${statusFilter(dailyStatuses)})
+          THEN o."totalAmount" ELSE 0 END) AS "dailyCurrent",
+        SUM(CASE
+          WHEN o."createdAt" >= ${startOfYesterday}
+            AND o."createdAt" <= ${new Date(startOfToday.getTime() - 1)}
+            AND o."status" IN (${statusFilter(dailyStatuses)})
+          THEN o."totalAmount" ELSE 0 END) AS "dailyPrevious",
+        SUM(CASE
+          WHEN o."createdAt" >= ${weeklyStart}
+            AND o."createdAt" <= ${now}
+            AND o."status" IN (${statusFilter(weeklyStatuses)})
+          THEN o."totalAmount" ELSE 0 END) AS "weeklyCurrent",
+        SUM(CASE
+          WHEN o."createdAt" >= ${previousWeeklyStart}
+            AND o."createdAt" <= ${new Date(weeklyStart.getTime() - 1)}
+            AND o."status" IN (${statusFilter(weeklyStatuses)})
+          THEN o."totalAmount" ELSE 0 END) AS "weeklyPrevious",
+        SUM(CASE
+          WHEN o."createdAt" >= ${monthlyStart}
+            AND o."createdAt" <= ${now}
+            AND o."status" IN (${statusFilter(deliveredStatuses)})
+          THEN o."totalAmount" ELSE 0 END) AS "monthlyCurrent",
+        SUM(CASE
+          WHEN o."createdAt" >= ${previousMonthlyStart}
+            AND o."createdAt" <= ${new Date(monthlyStart.getTime() - 1)}
+            AND o."status" IN (${statusFilter(deliveredStatuses)})
+          THEN o."totalAmount" ELSE 0 END) AS "monthlyPrevious",
+        SUM(CASE
+          WHEN o."createdAt" >= ${yearlyStart}
+            AND o."createdAt" <= ${now}
+            AND o."status" IN (${statusFilter(deliveredStatuses)})
+          THEN o."totalAmount" ELSE 0 END) AS "yearlyCurrent",
+        SUM(CASE
+          WHEN o."createdAt" >= ${previousYearlyStart}
+            AND o."createdAt" <= ${previousYearlyEnd}
+            AND o."status" IN (${statusFilter(deliveredStatuses)})
+          THEN o."totalAmount" ELSE 0 END) AS "yearlyPrevious"
+      FROM "Order" o
+      WHERE o."createdAt" >= ${previousYearlyStart}
+        AND o."createdAt" <= ${now}
+        AND o."status" IN (${statusFilter([
+          ...dailyStatuses,
+          ...weeklyStatuses,
+          ...deliveredStatuses,
+        ])})
+    `);
 
     const calculateGrowth = (current: number, previous: number): number => {
       if (previous === 0) return current > 0 ? 100 : 0;
-      return ((current - previous) / previous) * 100;
+      return Number((((current - previous) / previous) * 100).toFixed(2));
     };
 
     return {
-      daily: calculateGrowth(todaySales.totalSales, yesterdaySales.totalSales),
+      daily: calculateGrowth(
+        Number(totals.dailyCurrent ?? 0),
+        Number(totals.dailyPrevious ?? 0),
+      ),
       weekly: calculateGrowth(
-        thisWeekSales.totalSales,
-        lastWeekSales.totalSales,
+        Number(totals.weeklyCurrent ?? 0),
+        Number(totals.weeklyPrevious ?? 0),
       ),
       monthly: calculateGrowth(
-        thisMonthSales.totalSales,
-        lastMonthSales.totalSales,
+        Number(totals.monthlyCurrent ?? 0),
+        Number(totals.monthlyPrevious ?? 0),
       ),
       yearly: calculateGrowth(
-        thisYearSales.totalSales,
-        lastYearSales.totalSales,
+        Number(totals.yearlyCurrent ?? 0),
+        Number(totals.yearlyPrevious ?? 0),
       ),
     };
+  }
+
+  private static getPeriodStart(
+    date: Date,
+    unit: "days" | "years",
+    amount: number,
+  ): Date {
+    const result = new Date(date);
+    if (unit === "days") {
+      result.setDate(result.getDate() - amount);
+    } else {
+      result.setFullYear(result.getFullYear() - amount);
+    }
+    return result;
   }
 }

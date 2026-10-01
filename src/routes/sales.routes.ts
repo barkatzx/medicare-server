@@ -25,7 +25,11 @@ router.get("/monthly", SalesController.getMonthlySales);
 router.get("/yearly", SalesController.getYearlySales);
 
 // Sales summary (overall statistics)
-router.get("/summary", cacheRoute(3600), SalesController.getSalesSummary);
+router.get(
+  "/summary",
+  cacheRoute(300, "sales-summary-v2"),
+  SalesController.getSalesSummary,
+);
 
 // Custom date range sales
 router.get("/custom-range", cacheRoute(300), SalesController.getCustomRangeSales);

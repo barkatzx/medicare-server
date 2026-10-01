@@ -4,7 +4,9 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const redisClient = new Redis(process.env.REDIS_URL!, {
-  maxRetriesPerRequest: 3,
+  maxRetriesPerRequest: 0,
+  enableOfflineQueue: false,
+  commandTimeout: 2000,
   retryStrategy(times) {
     const delay = Math.min(times * 50, 2000);
     return delay;
@@ -24,6 +26,12 @@ redisClient.on("error", (err: any) => {
 
 export const connectRedis = async () => {
   try {
+    if (redisClient.status !== "ready") {
+      await new Promise<void>((resolve) => {
+        redisClient.once("ready", resolve);
+      });
+    }
+
     const response = await redisClient.ping();
     console.log("Redis Client Connected:", response);
   } catch (error) {

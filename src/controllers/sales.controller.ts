@@ -166,9 +166,11 @@ export class SalesController {
    */
   static async getSalesSummary(req: AuthRequest, res: Response) {
     try {
-      const summary = await SalesService.getSalesSummary();
-      const growth = await SalesService.getSalesGrowth();
-      const salesByStatus = await SalesService.getSalesByStatus();
+      const [summary, growth, salesByStatus] = await Promise.all([
+        SalesService.getSalesSummary(),
+        SalesService.getSalesGrowth(),
+        SalesService.getSalesByStatus(),
+      ]);
 
       res.status(200).json({
         success: true,

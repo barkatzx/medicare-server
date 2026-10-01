@@ -69,6 +69,7 @@ router.put(
   "/:orderId/payment/confirm",
   authenticateToken,
   authorizeAdmin,
+  invalidateCache("cache:*:*sales*"),
   OrderController.confirmPaymentCOD,
 );
 
