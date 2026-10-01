@@ -16,13 +16,13 @@ router.use(authenticateToken, authorizeAdmin);
 router.get("/daily", SalesController.getDailySales);
 
 // Weekly sales report
-router.get("/weekly", cacheRoute(3600), SalesController.getWeeklySales);
+router.get("/weekly", SalesController.getWeeklySales);
 
 // Monthly sales report
-router.get("/monthly", cacheRoute(3600), SalesController.getMonthlySales);
+router.get("/monthly", SalesController.getMonthlySales);
 
 // Yearly sales report
-router.get("/yearly", cacheRoute(3600), SalesController.getYearlySales);
+router.get("/yearly", SalesController.getYearlySales);
 
 // Sales summary (overall statistics)
 router.get("/summary", cacheRoute(3600), SalesController.getSalesSummary);

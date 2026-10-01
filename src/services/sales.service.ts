@@ -157,117 +157,151 @@ export class SalesService {
   }
 
   /**
-   * Get weekly sales (last 7 days)
+   * Get shipped, confirmed, and delivered sales from the last 7 local calendar days.
    */
   static async getWeeklySales(): Promise<TimeRangeSales[]> {
-    const weeklyData: TimeRangeSales[] = [];
-    const today = new Date();
-
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-
-      const dayData = await this.getDailySalesForDate(date);
-      weeklyData.push({
-        period: "daily",
-        totalSales: dayData.totalSales,
-        totalOrders: dayData.totalOrders,
-        averageOrderValue: dayData.averageOrderValue,
-        totalItemsSold: dayData.totalItemsSold,
-      });
-    }
-
-    return weeklyData;
+    const now = new Date();
+    return this.getSalesByStatusByDay(now, 7, [
+      OrderStatus.shipped,
+      OrderStatus.confirmed,
+      OrderStatus.delivered,
+    ]);
   }
 
   /**
-   * Get monthly sales (last 30 days)
+   * Get delivered sales from the last 30 local calendar days
    */
   static async getMonthlySales(): Promise<TimeRangeSales[]> {
-    const monthlyData: TimeRangeSales[] = [];
-    const today = new Date();
-
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - i);
-
-      const dayData = await this.getDailySalesForDate(date);
-      monthlyData.push({
-        period: "daily",
-        totalSales: dayData.totalSales,
-        totalOrders: dayData.totalOrders,
-        averageOrderValue: dayData.averageOrderValue,
-        totalItemsSold: dayData.totalItemsSold,
-      });
-    }
-
-    return monthlyData;
+    const now = new Date();
+    return this.getSalesByStatusByDay(now, 30, [OrderStatus.delivered]);
   }
 
   /**
-   * Get yearly sales (last 12 months)
+   * Get delivered sales from the last year, grouped into 12 rolling months
    */
   static async getYearlySales(): Promise<TimeRangeSales[]> {
-    const yearlyData: TimeRangeSales[] = [];
-    const today = new Date();
+    const now = new Date();
+    const monthBoundaries = Array.from({ length: 13 }, (_, index) =>
+      this.getMonthOffset(now, index - 12),
+    );
+    monthBoundaries[12] = now;
 
-    for (let i = 11; i >= 0; i--) {
-      const startOfMonth = new Date(
-        today.getFullYear(),
-        today.getMonth() - i,
-        1,
-      );
-      const endOfMonth = new Date(
-        today.getFullYear(),
-        today.getMonth() - i + 1,
-        0,
-        23,
-        59,
-        59,
-        999,
-      );
+    const orders = await this.getOrdersByStatus(
+      monthBoundaries[0],
+      now,
+      [OrderStatus.delivered],
+    );
 
-      const orders = await prisma.order.findMany({
-        where: {
-          createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
-          },
-          status: {
-            not: "cancelled",
-          },
-          payment: {
-            status: "paid",
-          },
-        },
-        include: {
-          items: true,
-        },
-      });
-
-      const totalSales = orders.reduce(
-        (sum, order) => sum + Number(order.totalAmount),
-        0,
+    return monthBoundaries.slice(0, 12).map((start, index) => {
+      const end = monthBoundaries[index + 1];
+      const monthOrders = orders.filter(
+        (order) =>
+          order.createdAt >= start &&
+          (index === 11 ? order.createdAt <= end : order.createdAt < end),
       );
-      const totalOrders = orders.length;
-      const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-      const totalItemsSold = orders.reduce(
-        (sum, order) =>
-          sum +
-          order.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
-        0,
-      );
+      return this.getTimeRangeSales(monthOrders, "monthly");
+    });
+  }
 
-      yearlyData.push({
-        period: "monthly",
-        totalSales,
-        totalOrders,
-        averageOrderValue,
-        totalItemsSold,
-      });
+  private static async getSalesByStatusByDay(
+    now: Date,
+    dayCount: number,
+    statuses: OrderStatus[],
+  ): Promise<TimeRangeSales[]> {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (dayCount - 1));
+
+    const orders = await this.getOrdersByStatus(start, now, statuses);
+    const dailyOrders = new Map<string, typeof orders>();
+    const days: Date[] = [];
+
+    for (let index = 0; index < dayCount; index++) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + index);
+      days.push(day);
+      dailyOrders.set(this.getLocalDateKey(day), []);
     }
 
-    return yearlyData;
+    for (const order of orders) {
+      const dayOrders = dailyOrders.get(this.getLocalDateKey(order.createdAt));
+      if (!dayOrders) {
+        throw new Error("Order fell outside the daily sales buckets");
+      }
+      dayOrders.push(order);
+    }
+
+    return days.map((day) =>
+      this.getTimeRangeSales(
+        dailyOrders.get(this.getLocalDateKey(day)) ?? [],
+        "daily",
+      ),
+    );
+  }
+
+  private static async getOrdersByStatus(
+    start: Date,
+    end: Date,
+    statuses: OrderStatus[],
+  ) {
+    return prisma.order.findMany({
+      where: {
+        createdAt: {
+          gte: start,
+          lte: end,
+        },
+        status: {
+          in: statuses,
+        },
+      },
+      include: {
+        items: true,
+      },
+    });
+  }
+
+  private static getTimeRangeSales(
+    orders: Array<{
+      totalAmount: unknown;
+      items: Array<{ quantity: number }>;
+    }>,
+    period: string,
+  ): TimeRangeSales {
+    const totalSales = orders.reduce(
+      (sum, order) => sum + Number(order.totalAmount),
+      0,
+    );
+    const totalOrders = orders.length;
+
+    return {
+      period,
+      totalSales,
+      totalOrders,
+      averageOrderValue: totalOrders > 0 ? totalSales / totalOrders : 0,
+      totalItemsSold: orders.reduce(
+        (sum, order) =>
+          sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+        0,
+      ),
+    };
+  }
+
+  private static getLocalDateKey(date: Date): string {
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  }
+
+  private static getMonthOffset(date: Date, offset: number): Date {
+    const result = new Date(date);
+    const dayOfMonth = result.getDate();
+    result.setDate(1);
+    result.setMonth(result.getMonth() + offset);
+    const lastDayOfMonth = new Date(
+      result.getFullYear(),
+      result.getMonth() + 1,
+      0,
+    ).getDate();
+    result.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+    return result;
   }
 
   /**

@@ -42,12 +42,19 @@ export class SalesController {
         }),
         { totalSales: 0, totalOrders: 0, totalItemsSold: 0 },
       );
+      const weeklySummary = {
+        ...weeklyTotals,
+        averageOrderValue:
+          weeklyTotals.totalOrders > 0
+            ? weeklyTotals.totalSales / weeklyTotals.totalOrders
+            : 0,
+      };
 
       res.status(200).json({
         success: true,
         data: {
           daily_breakdown: weeklyData,
-          weekly_totals: weeklyTotals,
+          weekly_totals: weeklySummary,
           average_daily_sales: weeklyTotals.totalSales / 7,
         },
         message: "Weekly sales retrieved successfully",
@@ -77,12 +84,19 @@ export class SalesController {
         }),
         { totalSales: 0, totalOrders: 0, totalItemsSold: 0 },
       );
+      const monthlySummary = {
+        ...monthlyTotals,
+        averageOrderValue:
+          monthlyTotals.totalOrders > 0
+            ? monthlyTotals.totalSales / monthlyTotals.totalOrders
+            : 0,
+      };
 
       res.status(200).json({
         success: true,
         data: {
           daily_breakdown: monthlyData,
-          monthly_totals: monthlyTotals,
+          monthly_totals: monthlySummary,
           average_daily_sales: monthlyTotals.totalSales / 30,
           best_day: monthlyData.reduce(
             (best, day) => (day.totalSales > best.totalSales ? day : best),
@@ -116,12 +130,19 @@ export class SalesController {
         }),
         { totalSales: 0, totalOrders: 0, totalItemsSold: 0 },
       );
+      const yearlySummary = {
+        ...yearlyTotals,
+        averageOrderValue:
+          yearlyTotals.totalOrders > 0
+            ? yearlyTotals.totalSales / yearlyTotals.totalOrders
+            : 0,
+      };
 
       res.status(200).json({
         success: true,
         data: {
           monthly_breakdown: yearlyData,
-          yearly_totals: yearlyTotals,
+          yearly_totals: yearlySummary,
           average_monthly_sales: yearlyTotals.totalSales / 12,
           best_month: yearlyData.reduce(
             (best, month) =>
