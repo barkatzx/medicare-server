@@ -10,10 +10,7 @@ export class SalesController {
    */
   static async getDailySales(req: AuthRequest, res: Response) {
     try {
-      const { date } = req.query;
-      const targetDate = date ? new Date(date as string) : new Date();
-
-      const salesData = await SalesService.getDailySales(targetDate);
+      const salesData = await SalesService.getDailySales();
 
       res.status(200).json({
         success: true,
@@ -352,7 +349,9 @@ export class SalesController {
       const prev7Days = new Date(last7Days.getTime() - 7 * 24 * 60 * 60 * 1000);
 
       const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      const prev30Days = new Date(last30Days.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const prev30Days = new Date(
+        last30Days.getTime() - 30 * 24 * 60 * 60 * 1000,
+      );
 
       const lastYear = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
       const prevYear = new Date(lastYear.getTime() - 365 * 24 * 60 * 60 * 1000);
@@ -409,7 +408,10 @@ export class SalesController {
         }),
         prisma.orderItem.aggregate({
           where: {
-            order: { status: { not: "cancelled" }, payment: { status: "paid" } },
+            order: {
+              status: { not: "cancelled" },
+              payment: { status: "paid" },
+            },
           },
           _sum: { quantity: true },
         }),
@@ -464,7 +466,10 @@ export class SalesController {
           growth: {
             daily: calculateGrowth(todayStats.sales, yesterdayStats.sales),
             weekly: calculateGrowth(last7DaysStats.sales, prev7DaysStats.sales),
-            monthly: calculateGrowth(last30DaysStats.sales, prev30DaysStats.sales),
+            monthly: calculateGrowth(
+              last30DaysStats.sales,
+              prev30DaysStats.sales,
+            ),
             yearly: calculateGrowth(lastYearStats.sales, prevYearStats.sales),
           },
           recent_orders: recentOrders,
@@ -515,13 +520,13 @@ export class SalesController {
             totalPrice: 0,
           });
         }
-        
+
         const prod = productMap.get(item.productId);
         const itemTotalPrice = Number(item.price) * item.quantity;
-        
+
         prod.quantity += item.quantity;
         prod.totalPrice += itemTotalPrice;
-        
+
         grandTotalQuantity += item.quantity;
         grandTotalPrice += itemTotalPrice;
       });
@@ -536,7 +541,7 @@ export class SalesController {
             totalProducts: orderedProducts.length,
             totalQuantity: grandTotalQuantity,
             totalRevenue: grandTotalPrice,
-          }
+          },
         },
         message: "Today's ordered products retrieved successfully",
       });

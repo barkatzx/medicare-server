@@ -81,9 +81,61 @@ export class SalesService {
   }
 
   /**
-   * Get daily sales for a specific date
+   * Get pending and confirmed sales across all dates
    */
-  static async getDailySales(
+  static async getDailySales(): Promise<
+    TimeRangeSales & { totalDiscounts: number }
+  > {
+    const orders = await prisma.order.findMany({
+      where: {
+        status: {
+          in: [OrderStatus.pending, OrderStatus.confirmed],
+        },
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    const totalSales = orders.reduce(
+      (sum, order) => sum + Number(order.totalAmount),
+      0,
+    );
+    const totalOrders = orders.length;
+    const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+    const totalItemsSold = orders.reduce(
+      (sum, order) =>
+        sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+      0,
+    );
+
+    let totalDiscounts = 0;
+    for (const order of orders) {
+      for (const item of order.items) {
+        const product = await prisma.product.findUnique({
+          where: { id: item.productId },
+        });
+        if (product && Number(product.price) > Number(item.price)) {
+          totalDiscounts +=
+            (Number(product.price) - Number(item.price)) * item.quantity;
+        }
+      }
+    }
+
+    return {
+      period: "daily",
+      totalSales,
+      totalOrders,
+      averageOrderValue,
+      totalItemsSold,
+      totalDiscounts,
+    };
+  }
+
+  /**
+   * Get sales for a specific date using the existing paid-order criteria.
+   */
+  private static async getDailySalesForDate(
     date: Date,
   ): Promise<TimeRangeSales & { date: string }> {
     const startOfDay = new Date(date);
@@ -97,7 +149,10 @@ export class SalesService {
     return {
       period: "daily",
       date: startOfDay.toISOString().split("T")[0],
-      ...salesData,
+      totalSales: salesData.totalSales,
+      totalOrders: salesData.totalOrders,
+      averageOrderValue: salesData.averageOrderValue,
+      totalItemsSold: salesData.totalItemsSold,
     };
   }
 
@@ -112,7 +167,7 @@ export class SalesService {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
 
-      const dayData = await this.getDailySales(date);
+      const dayData = await this.getDailySalesForDate(date);
       weeklyData.push({
         period: "daily",
         totalSales: dayData.totalSales,
@@ -136,7 +191,7 @@ export class SalesService {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
 
-      const dayData = await this.getDailySales(date);
+      const dayData = await this.getDailySalesForDate(date);
       monthlyData.push({
         period: "daily",
         totalSales: dayData.totalSales,
@@ -387,7 +442,7 @@ export class SalesService {
     const currentDate = new Date(start);
 
     while (currentDate <= end) {
-      const dayData = await this.getDailySales(currentDate);
+      const dayData = await this.getDailySalesForDate(currentDate);
       dailyBreakdown.push({
         period: "daily",
         totalSales: dayData.totalSales,
@@ -426,8 +481,8 @@ export class SalesService {
     const lastYear = new Date(today);
     lastYear.setFullYear(today.getFullYear() - 1);
 
-    const todaySales = await this.getDailySales(today);
-    const yesterdaySales = await this.getDailySales(yesterday);
+    const todaySales = await this.getDailySalesForDate(today);
+    const yesterdaySales = await this.getDailySalesForDate(yesterday);
 
     const thisWeekSales = await this.getSalesData(lastWeek, today);
     const lastWeekSales = await this.getSalesData(

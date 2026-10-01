@@ -5,7 +5,7 @@ import {
   authenticateToken,
   authorizeAdmin,
 } from "../middleware/auth.middleware";
-import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
+import { cacheRoute } from "../middleware/cache.middleware";
 
 const router = Router();
 
@@ -13,7 +13,7 @@ const router = Router();
 router.use(authenticateToken, authorizeAdmin);
 
 // Daily sales report
-router.get("/daily", cacheRoute(3600), SalesController.getDailySales);
+router.get("/daily", SalesController.getDailySales);
 
 // Weekly sales report
 router.get("/weekly", cacheRoute(3600), SalesController.getWeeklySales);
