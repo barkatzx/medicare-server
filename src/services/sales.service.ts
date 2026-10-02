@@ -20,67 +20,6 @@ export interface TimeRangeSales {
 
 export class SalesService {
   /**
-   * Get total sales for a specific date range
-   */
-  static async getSalesData(
-    startDate: Date,
-    endDate: Date,
-  ): Promise<SalesData> {
-    const orders = await prisma.order.findMany({
-      where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-        status: {
-          not: "cancelled", // Exclude cancelled orders
-        },
-        payment: {
-          status: "paid", // Only count paid orders
-        },
-      },
-      include: {
-        items: true,
-        payment: true,
-      },
-    });
-
-    const totalSales = orders.reduce(
-      (sum, order) => sum + Number(order.totalAmount),
-      0,
-    );
-    const totalOrders = orders.length;
-    const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-    const totalItemsSold = orders.reduce(
-      (sum, order) =>
-        sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
-      0,
-    );
-
-    // Calculate total discounts (original price - paid amount)
-    let totalDiscounts = 0;
-    for (const order of orders) {
-      for (const item of order.items) {
-        const product = await prisma.product.findUnique({
-          where: { id: item.productId },
-        });
-        if (product && Number(product.price) > Number(item.price)) {
-          totalDiscounts +=
-            (Number(product.price) - Number(item.price)) * item.quantity;
-        }
-      }
-    }
-
-    return {
-      totalSales,
-      totalOrders,
-      averageOrderValue,
-      totalItemsSold,
-      totalDiscounts,
-    };
-  }
-
-  /**
    * Get pending and confirmed sales across all dates
    */
   static async getDailySales(): Promise<
@@ -129,30 +68,6 @@ export class SalesService {
       averageOrderValue,
       totalItemsSold,
       totalDiscounts,
-    };
-  }
-
-  /**
-   * Get sales for a specific date using the existing paid-order criteria.
-   */
-  private static async getDailySalesForDate(
-    date: Date,
-  ): Promise<TimeRangeSales & { date: string }> {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const salesData = await this.getSalesData(startOfDay, endOfDay);
-
-    return {
-      period: "daily",
-      date: startOfDay.toISOString().split("T")[0],
-      totalSales: salesData.totalSales,
-      totalOrders: salesData.totalOrders,
-      averageOrderValue: salesData.averageOrderValue,
-      totalItemsSold: salesData.totalItemsSold,
     };
   }
 
@@ -583,44 +498,6 @@ export class SalesService {
         totalOrders: totals?._count._all ?? 0,
       };
     });
-  }
-
-  /**
-   * Get custom date range sales
-   */
-  static async getCustomDateRangeSales(
-    startDate: string,
-    endDate: string,
-  ): Promise<{
-    salesData: SalesData;
-    dailyBreakdown: TimeRangeSales[];
-  }> {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-
-    const salesData = await this.getSalesData(start, end);
-
-    // Get daily breakdown
-    const dailyBreakdown: TimeRangeSales[] = [];
-    const currentDate = new Date(start);
-
-    while (currentDate <= end) {
-      const dayData = await this.getDailySalesForDate(currentDate);
-      dailyBreakdown.push({
-        period: "daily",
-        totalSales: dayData.totalSales,
-        totalOrders: dayData.totalOrders,
-        averageOrderValue: dayData.averageOrderValue,
-        totalItemsSold: dayData.totalItemsSold,
-      });
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    return {
-      salesData,
-      dailyBreakdown,
-    };
   }
 
   /**
