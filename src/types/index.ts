@@ -39,6 +39,8 @@ export interface CreateProductBody {
   discountedPrice?: number;
   discountPercent?: number;
   stock?: number;
+  distributor?: string | null;
+  tp?: number | null;
   categoryId: string;
   images?: ProductImageInput[];
 }
@@ -50,6 +52,8 @@ export interface UpdateProductBody {
   discountedPrice?: number;
   discountPercent?: number;
   stock?: number;
+  distributor?: string | null;
+  tp?: number | null;
   categoryId?: string;
 }
 
@@ -63,6 +67,8 @@ export interface ProductResponse {
   finalPrice: number; // Calculated field
   savings: number; // Calculated field
   stock: number;
+  distributor: string | null;
+  tp: number | null;
   categoryId: string;
   images: any[];
   category: any;

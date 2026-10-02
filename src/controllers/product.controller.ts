@@ -5,6 +5,12 @@ import { DiscountService } from "../services/discount.service";
 import { ImageService } from "../services/image.service";
 import { AuthRequest } from "../types";
 import { ProductService } from "../services/product.service";
+
+const formatProductTp = <T extends { tp: unknown }>(product: T) => ({
+  ...product,
+  tp: product.tp == null ? null : Number(product.tp),
+});
+
 export class ProductController {
   // Get all products with discount calculation
   static async getAllProducts(req: Request, res: Response) {
@@ -88,7 +94,7 @@ export class ProductController {
         );
 
         return {
-          ...product,
+          ...formatProductTp(product),
           price: Number(product.price),
           discountedPrice: product.discountedPrice
             ? Number(product.discountedPrice)
@@ -164,7 +170,7 @@ export class ProductController {
       );
 
       const productWithDiscount = {
-        ...product,
+        ...formatProductTp(product),
         price: Number(product.price),
         discountedPrice: product.discountedPrice
           ? Number(product.discountedPrice)
@@ -209,6 +215,8 @@ export class ProductController {
         discountPercent,
         stock,
         categoryId,
+        distributor,
+        tp,
       } = req.body;
 
       const files = req.files as Express.Multer.File[];
@@ -229,6 +237,15 @@ export class ProductController {
           error: "Price must be greater than 0",
         });
       }
+
+      const parsedDistributor =
+        typeof distributor === "string" && distributor.trim()
+          ? distributor.trim()
+          : null;
+      const parsedTp =
+        tp == null || (typeof tp === "string" && tp.trim() === "")
+          ? null
+          : Number(tp);
 
       // Validate discount
       const parsedDiscountedPrice = discountedPrice
@@ -276,6 +293,8 @@ export class ProductController {
           discountedPrice: parsedDiscountedPrice,
           discountPercent: parsedDiscountPercent,
           stock: stock ? parseInt(stock) : 0,
+          distributor: parsedDistributor,
+          tp: parsedTp,
           categoryId,
           images:
             imageUrls.length > 0
@@ -304,7 +323,7 @@ export class ProductController {
       res.status(201).json({
         success: true,
         data: {
-          ...product,
+          ...formatProductTp(product),
           price: Number(product.price),
           discountedPrice: product.discountedPrice
             ? Number(product.discountedPrice)
@@ -338,6 +357,8 @@ export class ProductController {
         discountPercent,
         stock,
         categoryId,
+        distributor,
+        tp,
       } = req.body;
 
       const files = req.files as Express.Multer.File[];
@@ -373,6 +394,18 @@ export class ProductController {
       const parsedDiscountPercent = discountPercent
         ? parseInt(discountPercent)
         : undefined;
+      const parsedDistributor =
+        distributor === undefined
+          ? undefined
+          : typeof distributor === "string" && distributor.trim()
+            ? distributor.trim()
+            : null;
+      const parsedTp =
+        tp === undefined
+          ? undefined
+          : tp == null || (typeof tp === "string" && tp.trim() === "")
+            ? null
+            : Number(tp);
 
       // Validate discount if price or discount is being updated
       if (
@@ -422,6 +455,8 @@ export class ProductController {
           discountedPrice: parsedDiscountedPrice,
           discountPercent: parsedDiscountPercent,
           stock: stock !== undefined ? parseInt(stock) : undefined,
+          distributor: parsedDistributor,
+          tp: parsedTp,
           categoryId: categoryId || undefined,
           images: newImagesData,
         },
@@ -442,7 +477,7 @@ export class ProductController {
       res.status(200).json({
         success: true,
         data: {
-          ...product,
+          ...formatProductTp(product),
           price: Number(product.price),
           discountedPrice: product.discountedPrice
             ? Number(product.discountedPrice)
@@ -512,7 +547,7 @@ export class ProductController {
       res.status(200).json({
         success: true,
         data: {
-          products,
+          products: products.map(formatProductTp),
           pagination: {
             page,
             limit,
@@ -786,7 +821,7 @@ export class ProductController {
       res.status(200).json({
         success: true,
         data: {
-          products,
+          products: products.map(formatProductTp),
           pagination: {
             page,
             limit,
@@ -806,7 +841,16 @@ export class ProductController {
 
   static async createProduct(req: AuthRequest, res: Response) {
     try {
-      const { name, description, price, stock, categoryId, images } = req.body;
+      const {
+        name,
+        description,
+        price,
+        stock,
+        categoryId,
+        images,
+        distributor,
+        tp,
+      } = req.body;
 
       // Validation
       if (!name || !description || !price || !categoryId) {
@@ -841,6 +885,14 @@ export class ProductController {
           description,
           price,
           stock: stock || 0,
+          distributor:
+            typeof distributor === "string" && distributor.trim()
+              ? distributor.trim()
+              : null,
+          tp:
+            tp == null || (typeof tp === "string" && tp.trim() === "")
+              ? null
+              : Number(tp),
           categoryId,
           images:
             images && images.length > 0
@@ -860,7 +912,7 @@ export class ProductController {
 
       res.status(201).json({
         success: true,
-        data: product,
+        data: formatProductTp(product),
         message: "Product created successfully",
       });
     } catch (error: any) {
@@ -961,7 +1013,7 @@ export class ProductController {
 
       res.status(200).json({
         success: true,
-        data: updatedProduct,
+        data: formatProductTp(updatedProduct),
         message: "Stock updated successfully",
       });
     } catch (error) {
@@ -994,7 +1046,7 @@ export class ProductController {
 
       res.status(200).json({
         success: true,
-        data: products,
+        data: products.map(formatProductTp),
       });
     } catch (error) {
       console.error("Get low stock products error:", error);

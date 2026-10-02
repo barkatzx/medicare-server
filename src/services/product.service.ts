@@ -22,6 +22,7 @@ export class ProductService {
         discountedPrice: product.discountedPrice
           ? Number(product.discountedPrice)
           : null,
+        tp: product.tp == null ? null : Number(product.tp),
         finalPrice,
         savings: DiscountService.calculateSavings(
           Number(product.price),

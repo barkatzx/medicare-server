@@ -7,6 +7,7 @@ import {
 } from "../middleware/auth.middleware";
 import { uploadMultiple, handleMulterError } from "../middleware/upload.middleware";
 import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
+import { validateProductFields } from "../validators/product.validator";
 
 const router = Router();
 
@@ -33,6 +34,7 @@ router.post(
   authorizeAdmin,
   invalidateCache("cache:*:*products*"),
   handleMulterError(uploadMultiple),
+  validateProductFields,
   ProductController.createProductWithImages,
 );
 
@@ -66,6 +68,7 @@ router.put(
   authorizeAdmin,
   invalidateCache("cache:*:*products*"),
   handleMulterError(uploadMultiple),
+  validateProductFields,
   ProductController.updateProduct,
 );
 router.delete(
