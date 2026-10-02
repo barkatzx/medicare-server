@@ -32,6 +32,10 @@ router.get(
 );
 
 // Today's ordered products summary
-router.get("/today-ordered-products", cacheRoute(300), SalesController.getTodayOrderedProducts);
+router.get(
+  "/today-ordered-products",
+  cacheRoute(300, "ordered-products-v2"),
+  SalesController.getTodayOrderedProducts,
+);
 
 export default router;

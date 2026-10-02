@@ -195,27 +195,22 @@ export class SalesController {
    */
   static async getTodayOrderedProducts(req: AuthRequest, res: Response) {
     try {
-      const now = new Date();
-      const today = new Date(now);
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
       const items = await prisma.orderItem.findMany({
         where: {
           order: {
-            createdAt: { gte: today, lt: tomorrow },
             status: { in: ["pending", "confirmed"] },
           },
         },
         select: {
           productId: true,
           quantity: true,
-          price: true,
           product: {
             select: {
+              id: true,
               name: true,
-              category: { select: { name: true } },
+              distributor: true,
+              price: true,
+              tp: true,
             },
           },
         },
@@ -224,36 +219,32 @@ export class SalesController {
       const productMap = new Map<
         string,
         {
-          id: string;
           productName: string;
+          distributor: string | null;
           quantity: number;
-          categoryName: string;
-          totalPrice: number;
+          price: number;
+          tp: number | null;
         }
       >();
       let grandTotalQuantity = 0;
       let grandTotalPrice = 0;
 
       items.forEach((item) => {
-        let prod = productMap.get(item.productId);
+        let prod = productMap.get(item.product.id);
         if (!prod) {
           prod = {
-            id: item.productId,
             productName: item.product.name,
+            distributor: item.product.distributor,
             quantity: 0,
-            categoryName: item.product.category.name,
-            totalPrice: 0,
+            price: Number(item.product.price),
+            tp: item.product.tp == null ? null : Number(item.product.tp),
           };
-          productMap.set(item.productId, prod);
+          productMap.set(item.product.id, prod);
         }
 
-        const itemTotalPrice = Number(item.price) * item.quantity;
-
         prod.quantity += item.quantity;
-        prod.totalPrice += itemTotalPrice;
-
         grandTotalQuantity += item.quantity;
-        grandTotalPrice += itemTotalPrice;
+        grandTotalPrice += prod.price * item.quantity;
       });
 
       const orderedProducts = Array.from(productMap.values());
@@ -268,13 +259,13 @@ export class SalesController {
             totalRevenue: grandTotalPrice,
           },
         },
-        message: "Today's ordered products retrieved successfully",
+        message: "Ordered products retrieved successfully",
       });
     } catch (error) {
-      console.error("Get today ordered products error:", error);
+      console.error("Get ordered products error:", error);
       res.status(500).json({
         success: false,
-        error: "Failed to fetch today's ordered products",
+        error: "Failed to fetch ordered products",
       });
     }
   }
