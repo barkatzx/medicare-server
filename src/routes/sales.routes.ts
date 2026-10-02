@@ -27,7 +27,7 @@ router.get("/yearly", SalesController.getYearlySales);
 // Sales summary (overall statistics)
 router.get(
   "/summary",
-  cacheRoute(300, "sales-summary-v2"),
+  cacheRoute(300, "sales-summary-v3"),
   SalesController.getSalesSummary,
 );
 

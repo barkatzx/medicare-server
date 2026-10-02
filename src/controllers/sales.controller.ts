@@ -514,37 +514,55 @@ export class SalesController {
       const now = new Date();
       const today = new Date(now);
       today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // Fetch all order items from today's non-cancelled orders
       const items = await prisma.orderItem.findMany({
         where: {
           order: {
-            createdAt: { gte: today },
-            status: { not: "cancelled" },
+            createdAt: { gte: today, lt: tomorrow },
+            status: { in: ["pending", "confirmed"] },
           },
         },
-        include: {
+        select: {
+          productId: true,
+          quantity: true,
+          price: true,
           product: {
-            select: { name: true },
+            select: {
+              name: true,
+              category: { select: { name: true } },
+            },
           },
         },
       });
 
-      const productMap = new Map();
+      const productMap = new Map<
+        string,
+        {
+          id: string;
+          productName: string;
+          quantity: number;
+          categoryName: string;
+          totalPrice: number;
+        }
+      >();
       let grandTotalQuantity = 0;
       let grandTotalPrice = 0;
 
       items.forEach((item) => {
-        if (!productMap.has(item.productId)) {
-          productMap.set(item.productId, {
+        let prod = productMap.get(item.productId);
+        if (!prod) {
+          prod = {
             id: item.productId,
-            name: item.product.name,
+            productName: item.product.name,
             quantity: 0,
+            categoryName: item.product.category.name,
             totalPrice: 0,
-          });
+          };
+          productMap.set(item.productId, prod);
         }
 
-        const prod = productMap.get(item.productId);
         const itemTotalPrice = Number(item.price) * item.quantity;
 
         prod.quantity += item.quantity;

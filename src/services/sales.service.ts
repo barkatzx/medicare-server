@@ -311,19 +311,32 @@ export class SalesService {
       totalCustomers: number;
       topProducts: any[];
       topCategories: any[];
+      topCustomers: Array<{
+        id: string;
+        customerName: string | null;
+        pharmacyName: string | null;
+        totalOrders: number;
+        totalSales: number;
+      }>;
     }
   > {
+    const dateRange = {
+      startDate: new Date(0),
+      endDate: new Date(),
+    };
     const [
       allTimeData,
       totalCustomers,
       productsWithDetails,
       categoriesWithDetails,
+      customersWithDetails,
     ] =
       await Promise.all([
-        this.getSummarySalesData(),
+        this.getSummarySalesData(dateRange),
         this.getUniqueCustomerCount(),
         this.getTopProductsBySales(),
         this.getTopCategoriesBySales(),
+        this.getTopCustomersBySales(dateRange),
       ]);
 
     return {
@@ -331,6 +344,7 @@ export class SalesService {
       totalCustomers,
       topProducts: productsWithDetails,
       topCategories: categoriesWithDetails,
+      topCustomers: customersWithDetails,
     };
   }
 
@@ -347,9 +361,11 @@ export class SalesService {
     return result.totalCustomers;
   }
 
-  private static async getSummarySalesData(): Promise<SalesData> {
-    const startDate = new Date(0);
-    const endDate = new Date();
+  private static async getSummarySalesData(dateRange: {
+    startDate: Date;
+    endDate: Date;
+  }): Promise<SalesData> {
+    const { startDate, endDate } = dateRange;
     const eligibleOrderFilter = {
       createdAt: {
         gte: startDate,
@@ -415,6 +431,51 @@ export class SalesService {
     };
   }
 
+  private static async getTopCustomersBySales(dateRange: {
+    startDate: Date;
+    endDate: Date;
+  }): Promise<
+    Array<{
+      id: string;
+      customerName: string | null;
+      pharmacyName: string | null;
+      totalOrders: number;
+      totalSales: number;
+    }>
+  > {
+    const customers = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        customerName: string | null;
+        pharmacyName: string | null;
+        totalOrders: number;
+        totalSales: Prisma.Decimal;
+      }>
+    >(Prisma.sql`
+      SELECT
+        u."id",
+        u."name" AS "customerName",
+        u."pharmacy_name" AS "pharmacyName",
+        COUNT(o."id")::int AS "totalOrders",
+        SUM(o."totalAmount") AS "totalSales"
+      FROM "Order" o
+      INNER JOIN "User" u ON u."id" = o."userId"
+      INNER JOIN "Payment" payment ON payment."orderId" = o."id"
+      WHERE o."createdAt" >= ${dateRange.startDate}
+        AND o."createdAt" <= ${dateRange.endDate}
+        AND o."status" <> ${OrderStatus.cancelled}::"OrderStatus"
+        AND payment."status" = ${PaymentStatus.paid}::"PaymentStatus"
+      GROUP BY u."id", u."name", u."pharmacy_name"
+      ORDER BY COUNT(o."id") DESC, SUM(o."totalAmount") DESC
+      LIMIT 10
+    `);
+
+    return customers.map((customer) => ({
+      ...customer,
+      totalSales: Number(customer.totalSales),
+    }));
+  }
+
   private static async getTopProductsBySales(): Promise<
     Array<{
       id: string;
@@ -473,7 +534,7 @@ export class SalesService {
       INNER JOIN "Category" c ON c."id" = p."categoryId"
       GROUP BY c."id", c."name"
       ORDER BY SUM(oi."quantity") DESC
-      LIMIT 5
+      LIMIT 10
     `);
   }
 
