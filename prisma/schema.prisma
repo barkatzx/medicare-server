@@ -53,14 +53,67 @@ model User {
   password         String
   isApproved       Boolean   @default(false)
   defaultAddressId String?   @unique
-  cart          Cart?
-  orders        Order[]
-  addresses     Address[]
-  notifications Notification[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  fullAddress      String?
+  divisionId       String?
+  districtId       String?
+  upazilaId        String?
+  division         Division? @relation("UserDivision", fields: [divisionId], references: [id])
+  district         District? @relation("UserDistrict", fields: [districtId], references: [id])
+  upazila          Upazila?  @relation("UserUpazila", fields: [upazilaId], references: [id])
+  cart             Cart?
+  orders           Order[]
+  addresses        Address[]
+  notifications    Notification[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
   @@index([role])
   @@index([isApproved])
+  @@index([divisionId])
+  @@index([districtId])
+  @@index([upazilaId])
+}
+
+model Division {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  bnName    String?
+  districts District[]
+  users     User[]    @relation("UserDivision")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model District {
+  id         String    @id @default(uuid())
+  code       String    @unique
+  name       String
+  bnName     String?
+  divisionId String
+  division   Division  @relation(fields: [divisionId], references: [id])
+  upazilas   Upazila[]
+  users      User[]    @relation("UserDistrict")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([divisionId])
+  @@unique([divisionId, name])
+}
+
+model Upazila {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  name       String
+  bnName     String?
+  districtId String
+  district   District @relation(fields: [districtId], references: [id])
+  users      User[]   @relation("UserUpazila")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([districtId])
+  @@unique([districtId, name])
 }
 
 model Address {

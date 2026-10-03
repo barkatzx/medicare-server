@@ -28,8 +28,18 @@ export class UserController {
   // Register new user
   static async register(req: Request, res: Response) {
     try {
-      const { email, phone_number, name, pharmacy_name, password, role } =
-        req.body;
+      const {
+        email,
+        phone_number,
+        name,
+        pharmacy_name,
+        password,
+        role,
+        fullAddress,
+        divisionId,
+        districtId,
+        upazilaId,
+      } = req.body;
 
       if (!email || !phone_number || !password) {
         return res.status(400).json({
@@ -51,6 +61,10 @@ export class UserController {
         pharmacy_name,
         password,
         role,
+        fullAddress,
+        divisionId,
+        districtId,
+        upazilaId,
       });
 
       res.status(201).json({
@@ -105,6 +119,34 @@ export class UserController {
           isApproved: true,
           createdAt: true,
           defaultAddressId: true,
+          fullAddress: true,
+          divisionId: true,
+          districtId: true,
+          upazilaId: true,
+          division: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              bnName: true,
+            },
+          },
+          district: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              bnName: true,
+            },
+          },
+          upazila: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              bnName: true,
+            },
+          },
           addresses: {
             orderBy: { createdAt: "desc" },
           },
@@ -135,7 +177,15 @@ export class UserController {
   static async updateProfile(req: AuthRequest, res: Response) {
     try {
       const userId = req.user?.id;
-      const { name, pharmacy_name, phone_number } = req.body;
+      const {
+        name,
+        pharmacy_name,
+        phone_number,
+        fullAddress,
+        divisionId,
+        districtId,
+        upazilaId,
+      } = req.body;
 
       if (!userId) {
         return res.status(401).json({ error: "User not authenticated" });
@@ -145,6 +195,10 @@ export class UserController {
       if (name !== undefined) data.name = name;
       if (pharmacy_name !== undefined) data.pharmacy_name = pharmacy_name;
       if (phone_number !== undefined) data.phone_number = phone_number;
+      if (fullAddress !== undefined) data.fullAddress = fullAddress;
+      if (divisionId !== undefined) data.divisionId = divisionId;
+      if (districtId !== undefined) data.districtId = districtId;
+      if (upazilaId !== undefined) data.upazilaId = upazilaId;
 
       const updatedUser = await prisma.user.update({
         where: { id: userId },
@@ -157,6 +211,10 @@ export class UserController {
           pharmacy_name: true,
           role: true,
           isApproved: true,
+          fullAddress: true,
+          divisionId: true,
+          districtId: true,
+          upazilaId: true,
         },
       });
 
@@ -281,6 +339,34 @@ export class UserController {
             role: true,
             isApproved: true,
             createdAt: true,
+            fullAddress: true,
+            divisionId: true,
+            districtId: true,
+            upazilaId: true,
+            division: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                bnName: true,
+              },
+            },
+            district: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                bnName: true,
+              },
+            },
+            upazila: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                bnName: true,
+              },
+            },
           },
           skip: (pageNum - 1) * limitNum,
           take: limitNum,

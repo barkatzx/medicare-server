@@ -9,7 +9,18 @@ export class AuthService {
   }
 
   static async register(input: RegisterInput) {
-    const { email, phone_number, name, pharmacy_name, password, role } = input;
+    const {
+      email,
+      phone_number,
+      name,
+      pharmacy_name,
+      password,
+      role,
+      fullAddress,
+      divisionId,
+      districtId,
+      upazilaId,
+    } = input;
 
     if (role !== undefined && role !== "customer") {
       throw new Error(
@@ -38,6 +49,10 @@ export class AuthService {
         password: hashedPassword,
         role: "customer",
         isApproved: false,
+        fullAddress: fullAddress || null,
+        divisionId: divisionId || null,
+        districtId: districtId || null,
+        upazilaId: upazilaId || null,
       },
       select: {
         id: true,
@@ -47,6 +62,10 @@ export class AuthService {
         pharmacy_name: true,
         role: true,
         isApproved: true,
+        fullAddress: true,
+        divisionId: true,
+        districtId: true,
+        upazilaId: true,
         createdAt: true,
       },
     });

@@ -16,6 +16,10 @@ export interface RegisterInput {
   pharmacy_name?: string;
   password: string;
   role?: UserRole;
+  fullAddress?: string;
+  divisionId?: string;
+  districtId?: string;
+  upazilaId?: string;
 }
 
 export interface LoginInput {

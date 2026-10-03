@@ -8,14 +8,20 @@ import {
 } from "../middleware/auth.middleware";
 import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
 import { rateLimit } from "../middleware/rate-limit.middleware";
+import { validateLogin, validateRegister } from "../validators/auth.validator";
 
 const router = Router();
 
 // ==================== PUBLIC ROUTES ====================
 // Limit to 5 registration attempts per 15 minutes
-router.post("/register", rateLimit(5, 900), UserController.register);
+router.post(
+  "/register",
+  rateLimit(5, 900),
+  validateRegister,
+  UserController.register,
+);
 // Limit to 10 login attempts per 5 minutes
-router.post("/login", rateLimit(10, 300), UserController.login);
+router.post("/login", rateLimit(10, 300), validateLogin, UserController.login);
 router.post("/logout", authenticateToken, UserController.logout);
 
 // ==================== USER PROFILE ROUTES ====================
