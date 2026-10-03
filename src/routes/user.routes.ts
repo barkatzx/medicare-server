@@ -95,6 +95,12 @@ router.put(
   authorizeAdmin,
   UserController.approveUser,
 );
+router.patch(
+  "/:userId/role",
+  authenticateToken,
+  authorizeAdmin,
+  UserController.promoteUserToTSR,
+);
 router.delete(
   "/:userId",
   authenticateToken,

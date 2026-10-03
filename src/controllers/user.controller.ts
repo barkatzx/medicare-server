@@ -37,9 +37,10 @@ export class UserController {
         });
       }
 
-      if (role === "admin" || role === "TSR") {
+      if (role !== undefined && role !== "customer") {
         return res.status(403).json({
-          error: "Only customer accounts can be created during self-registration",
+          error:
+            "Only customer accounts can be created during self-registration",
         });
       }
 
@@ -307,6 +308,71 @@ export class UserController {
     } catch (error: any) {
       console.error("Get all users error:", error);
       res.status(500).json({ error: error.message || "Failed to fetch users" });
+    }
+  }
+
+  // Promote a customer to TSR (admin only)
+  static async promoteUserToTSR(req: AuthRequest, res: Response) {
+    try {
+      const { userId } = req.params;
+
+      if (req.body?.role !== "TSR") {
+        return res.status(400).json({ error: 'Role must be "TSR"' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, role: true },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (user.role !== "customer") {
+        return res.status(409).json({
+          error: "Only customers can be promoted to TSR",
+        });
+      }
+
+      const promotion = await prisma.user.updateMany({
+        where: { id: userId, role: "customer" },
+        data: { role: "TSR" },
+      });
+
+      if (promotion.count === 0) {
+        return res.status(409).json({
+          error: "Only customers can be promoted to TSR",
+        });
+      }
+
+      const updatedUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          phone_number: true,
+          name: true,
+          pharmacy_name: true,
+          role: true,
+          isApproved: true,
+          createdAt: true,
+        },
+      });
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      return res.status(200).json({
+        message: "User promoted to TSR successfully",
+        data: updatedUser,
+      });
+    } catch (error: any) {
+      console.error("Promote user to TSR error:", error);
+      return res
+        .status(500)
+        .json({ error: error.message || "Failed to promote user to TSR" });
     }
   }
 

@@ -11,8 +11,10 @@ export class AuthService {
   static async register(input: RegisterInput) {
     const { email, phone_number, name, pharmacy_name, password, role } = input;
 
-    if (role === "admin" || role === "TSR") {
-      throw new Error("Only customer accounts can be created during self-registration");
+    if (role !== undefined && role !== "customer") {
+      throw new Error(
+        "Only customer accounts can be created during self-registration",
+      );
     }
 
     const existingUser = await prisma.user.findFirst({
@@ -34,7 +36,7 @@ export class AuthService {
         name,
         pharmacy_name,
         password: hashedPassword,
-        role: role || "customer",
+        role: "customer",
         isApproved: false,
       },
       select: {
