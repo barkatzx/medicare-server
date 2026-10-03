@@ -34,7 +34,7 @@
   "main": "dist/index.js",
   "name": "medicare-server",
   "scripts": {
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "dev": "nodemon",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
