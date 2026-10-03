@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   admin
   customer
+  TSR
 }
 
 enum OrderStatus {

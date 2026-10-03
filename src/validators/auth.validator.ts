@@ -7,7 +7,7 @@ export const validateRegister = [
   body("password").isLength({ min: 6 }),
   body("name").optional().isString(),
   body("pharmacy_name").optional().isString(),
-  body("role").optional().isIn(["admin", "customer"]),
+  body("role").optional().isIn(["admin", "customer", "TSR"]),
   (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

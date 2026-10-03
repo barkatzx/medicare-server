@@ -11,6 +11,10 @@ export class AuthService {
   static async register(input: RegisterInput) {
     const { email, phone_number, name, pharmacy_name, password, role } = input;
 
+    if (role === "admin" || role === "TSR") {
+      throw new Error("Only customer accounts can be created during self-registration");
+    }
+
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email }, { phone_number }],

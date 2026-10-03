@@ -1,9 +1,11 @@
 import { Request } from "express";
 
+export type UserRole = "admin" | "customer" | "TSR";
+
 export interface UserPayload {
   id: string;
   email: string;
-  role: string;
+  role: UserRole;
   isApproved: boolean;
 }
 
@@ -13,7 +15,7 @@ export interface RegisterInput {
   name?: string;
   pharmacy_name?: string;
   password: string;
-  role?: "admin" | "customer";
+  role?: UserRole;
 }
 
 export interface LoginInput {

@@ -19,7 +19,7 @@ interface SendNotificationInput {
   type: "order" | "approval" | "system";
 }
 
-const VALID_ROLES = ["admin", "customer"] as const;
+const VALID_ROLES = ["admin", "customer", "TSR"] as const;
 const VALID_NOTIFICATION_TYPES = ["order", "approval", "system"] as const;
 type ValidRole = (typeof VALID_ROLES)[number];
 type ValidNotificationType = (typeof VALID_NOTIFICATION_TYPES)[number];
@@ -34,6 +34,12 @@ export class UserController {
       if (!email || !phone_number || !password) {
         return res.status(400).json({
           error: "Email, phone number, and password are required",
+        });
+      }
+
+      if (role === "admin" || role === "TSR") {
+        return res.status(403).json({
+          error: "Only customer accounts can be created during self-registration",
         });
       }
 
