@@ -83,22 +83,23 @@ export class AuthService {
   // Login With Email or Phone Number
   static async login(input: LoginInput) {
     const { email, phone_number, password } = input;
+    const normalizedEmail = email?.trim();
+    const normalizedPhoneNumber = phone_number?.trim();
 
     // Validate that at least one identifier is provided
-    if (!email && !phone_number) {
+    if (!normalizedEmail && !normalizedPhoneNumber) {
       throw new Error("Email or phone number is required");
     }
 
-    // Build the where condition dynamically
-    const whereCondition: any = {};
-    if (email) {
-      whereCondition.email = email;
-    } else if (phone_number) {
-      whereCondition.phone_number = phone_number;
-    }
-
-    const user = await prisma.user.findUnique({
-      where: whereCondition,
+    const user = await prisma.user.findFirst({
+      where: normalizedEmail
+        ? {
+            email: {
+              equals: normalizedEmail,
+              mode: "insensitive",
+            },
+          }
+        : { phone_number: normalizedPhoneNumber },
       select: {
         id: true,
         email: true,

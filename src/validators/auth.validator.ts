@@ -22,7 +22,10 @@ export const validateRegister = [
 ];
 
 export const validateLogin = [
-  body("email").isEmail().normalizeEmail(),
+  body("email").optional({ checkFalsy: true }).isEmail().normalizeEmail(),
+  body("phone_number")
+    .optional({ checkFalsy: true })
+    .isMobilePhone("any"),
   body("password").notEmpty(),
   (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
