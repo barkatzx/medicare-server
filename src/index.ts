@@ -8,6 +8,7 @@ import productRoutes from "./routes/product.routes";
 import orderRoutes from "./routes/order.routes";
 import salesRoutes from "./routes/sales.routes"; // Import sales routes
 import tsrRoutes from "./tsr/tsr.routes";
+import adminTsrSalesRoutes from "./admin-tsr-sales/admin-tsr-sales.routes";
 import { connectRedis } from "./config/redis";
 import redisClient from "./config/redis";
 // import { cacheMiddleware } from "./middleware/cache.middleware"; // Removed global cache
@@ -33,7 +34,8 @@ app.use("/v1/categories", categoryRoutes);
 app.use("/v1/products", productRoutes);
 app.use("/v1/orders", orderRoutes);
 app.use("/v1/tsr", tsrRoutes);
-app.use("/api/v1/tsr", tsrRoutes);
+app.use("/v1/tsr", tsrRoutes);
+app.use("/v1/admin/tsr-sales", adminTsrSalesRoutes);
 app.use("/v1/sales", salesRoutes);
 
 // Health check
