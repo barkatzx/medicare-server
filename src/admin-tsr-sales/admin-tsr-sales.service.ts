@@ -19,6 +19,12 @@ interface SalesTotals {
 interface TsrPeriodTotals {
   tsrId: string;
   tsrName: string | null;
+  divisionId: string | null;
+  districtId: string | null;
+  upazilaId: string | null;
+  division: { id: string; name: string; bnName?: string | null } | null;
+  district: { id: string; name: string; bnName?: string | null } | null;
+  upazila: { id: string; name: string; bnName?: string | null } | null;
   totalOrders: number;
   totalOrderValue: number;
   statuses: Partial<StatusTotals>;
@@ -133,9 +139,9 @@ const getOrderInclude = () => ({
       divisionId: true,
       districtId: true,
       upazilaId: true,
-      division: { select: { id: true, name: true } },
-      district: { select: { id: true, name: true } },
-      upazila: { select: { id: true, name: true } },
+      division: { select: { id: true, name: true, bnName: true } },
+      district: { select: { id: true, name: true, bnName: true } },
+      upazila: { select: { id: true, name: true, bnName: true } },
     },
   },
 });
@@ -150,6 +156,9 @@ export class AdminTsrSalesService {
         divisionId: true,
         districtId: true,
         upazilaId: true,
+        division: { select: { id: true, name: true, bnName: true } },
+        district: { select: { id: true, name: true, bnName: true } },
+        upazila: { select: { id: true, name: true, bnName: true } },
       },
       orderBy: { name: "asc" },
     });
@@ -282,6 +291,12 @@ export class AdminTsrSalesService {
           {
             tsrId: tsr.id,
             tsrName: tsr.name,
+            divisionId: tsr.divisionId ?? null,
+            districtId: tsr.districtId ?? null,
+            upazilaId: tsr.upazilaId ?? null,
+            division: tsr.division ?? null,
+            district: tsr.district ?? null,
+            upazila: tsr.upazila ?? null,
             totalOrders: 0,
             totalOrderValue: 0,
             statuses: Object.fromEntries(
@@ -376,9 +391,9 @@ export class AdminTsrSalesService {
         divisionId: true,
         districtId: true,
         upazilaId: true,
-        division: { select: { id: true, name: true } },
-        district: { select: { id: true, name: true } },
-        upazila: { select: { id: true, name: true } },
+        division: { select: { id: true, name: true, bnName: true } },
+        district: { select: { id: true, name: true, bnName: true } },
+        upazila: { select: { id: true, name: true, bnName: true } },
       },
       orderBy: { name: "asc" },
     });
@@ -425,15 +440,13 @@ export class AdminTsrSalesService {
         name: tsr.name,
         email: tsr.email,
         phone_number: tsr.phone_number,
-        territory: {
-          fullAddress: tsr.fullAddress,
-          division: tsr.division,
-          district: tsr.district,
-          upazila: tsr.upazila,
-          divisionId: tsr.divisionId,
-          districtId: tsr.districtId,
-          upazilaId: tsr.upazilaId,
-        },
+        fullAddress: tsr.fullAddress,
+        divisionId: tsr.divisionId,
+        districtId: tsr.districtId,
+        upazilaId: tsr.upazilaId,
+        division: tsr.division,
+        district: tsr.district,
+        upazila: tsr.upazila,
         ...summarizeTotals(stats),
       };
     });
@@ -451,9 +464,9 @@ export class AdminTsrSalesService {
         divisionId: true,
         districtId: true,
         upazilaId: true,
-        division: { select: { id: true, name: true } },
-        district: { select: { id: true, name: true } },
-        upazila: { select: { id: true, name: true } },
+        division: { select: { id: true, name: true, bnName: true } },
+        district: { select: { id: true, name: true, bnName: true } },
+        upazila: { select: { id: true, name: true, bnName: true } },
       },
     });
 
@@ -485,15 +498,13 @@ export class AdminTsrSalesService {
         name: tsr.name,
         email: tsr.email,
         phone_number: tsr.phone_number,
-        territory: {
-          fullAddress: tsr.fullAddress,
-          division: tsr.division,
-          district: tsr.district,
-          upazila: tsr.upazila,
-          divisionId: tsr.divisionId,
-          districtId: tsr.districtId,
-          upazilaId: tsr.upazilaId,
-        },
+        fullAddress: tsr.fullAddress,
+        divisionId: tsr.divisionId,
+        districtId: tsr.districtId,
+        upazilaId: tsr.upazilaId,
+        division: tsr.division,
+        district: tsr.district,
+        upazila: tsr.upazila,
       },
       ...summarizeTotals(statuses),
       territoryOrders,

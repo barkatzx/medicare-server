@@ -22,7 +22,7 @@ export class AdminTsrSalesController {
 
   static async getAllSummary(req: AuthRequest, res: Response) {
     const tsrId = req.query.tsrId;
-    if (typeof tsrId !== "string" || !isValidTsrId(tsrId)) {
+    if (tsrId !== undefined && (typeof tsrId !== "string" || !isValidTsrId(tsrId))) {
       return res.status(400).json({
         success: false,
         error: "A valid tsrId query parameter is required",
@@ -30,7 +30,9 @@ export class AdminTsrSalesController {
     }
 
     try {
-      const data = await AdminTsrSalesService.getAllSummary(tsrId);
+      const data = await AdminTsrSalesService.getAllSummary(
+        typeof tsrId === "string" ? tsrId : undefined,
+      );
       if (!data) {
         return res.status(404).json({ success: false, error: "TSR not found" });
       }

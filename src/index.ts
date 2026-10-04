@@ -35,6 +35,7 @@ app.use("/v1/products", productRoutes);
 app.use("/v1/orders", orderRoutes);
 app.use("/v1/tsr", tsrRoutes);
 app.use("/v1/tsr", tsrRoutes);
+app.use("/admin/tsr-sales", adminTsrSalesRoutes);
 app.use("/v1/admin/tsr-sales", adminTsrSalesRoutes);
 app.use("/v1/sales", salesRoutes);
 
