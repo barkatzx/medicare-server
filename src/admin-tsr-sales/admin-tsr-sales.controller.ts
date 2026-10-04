@@ -20,6 +20,19 @@ export class AdminTsrSalesController {
     }
   }
 
+  static async getAllSummary(_req: AuthRequest, res: Response) {
+    try {
+      const data = await AdminTsrSalesService.getAllSummary();
+      return res.status(200).json({ success: true, data });
+    } catch (error) {
+      console.error("Get all admin TSR sales summary error:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to fetch all TSR sales summaries",
+      });
+    }
+  }
+
   static async getTsrs(_req: AuthRequest, res: Response) {
     try {
       const data = await AdminTsrSalesService.getTsrs();

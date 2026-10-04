@@ -16,6 +16,29 @@ interface SalesTotals {
   statuses: StatusTotals;
 }
 
+interface TsrPeriodTotals {
+  tsrId: string;
+  tsrName: string | null;
+  totalOrders: number;
+  totalOrderValue: number;
+  statuses: Partial<StatusTotals>;
+}
+
+type TsrRanking = Omit<TsrPeriodTotals, "statuses">;
+
+type OrderGroup = {
+  userId: string;
+  status: OrderStatus;
+  _count: { _all: number };
+  _sum: { totalAmount: Prisma.Decimal | null };
+};
+
+interface PeriodDefinition {
+  statuses: OrderStatus[];
+  startDate?: Date;
+  endDate?: Date;
+}
+
 const zeroStatusTotals = (): StatusTotals => ({
   [OrderStatus.pending]: { count: 0, value: 0 },
   [OrderStatus.confirmed]: { count: 0, value: 0 },
@@ -84,6 +107,20 @@ const summarizeTotals = (totals: SalesTotals) => {
 const territoryKey = (territory: Territory) =>
   `${territory.divisionId}:${territory.districtId}:${territory.upazilaId}`;
 
+const getMonthOffset = (date: Date, offset: number): Date => {
+  const result = new Date(date);
+  const dayOfMonth = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + offset);
+  const lastDayOfMonth = new Date(
+    result.getFullYear(),
+    result.getMonth() + 1,
+    0,
+  ).getDate();
+  result.setDate(Math.min(dayOfMonth, lastDayOfMonth));
+  return result;
+};
+
 const getOrderInclude = () => ({
   user: {
     select: {
@@ -104,6 +141,205 @@ const getOrderInclude = () => ({
 });
 
 export class AdminTsrSalesService {
+  static async getAllSummary() {
+    const tsrs = await prisma.user.findMany({
+      where: { role: "TSR" },
+      select: {
+        id: true,
+        name: true,
+        divisionId: true,
+        districtId: true,
+        upazilaId: true,
+      },
+      orderBy: { name: "asc" },
+    });
+
+    const tsrsByTerritory = new Map<string, typeof tsrs>();
+    for (const tsr of tsrs) {
+      if (!tsr.divisionId || !tsr.districtId || !tsr.upazilaId) continue;
+      const key = territoryKey({
+        divisionId: tsr.divisionId,
+        districtId: tsr.districtId,
+        upazilaId: tsr.upazilaId,
+      });
+      const territoryTsrs = tsrsByTerritory.get(key) ?? [];
+      territoryTsrs.push(tsr);
+      tsrsByTerritory.set(key, territoryTsrs);
+    }
+
+    const territories = [...tsrsByTerritory.keys()].map((key) => {
+      const [divisionId, districtId, upazilaId] = key.split(":");
+      return { divisionId, districtId, upazilaId };
+    });
+
+    const now = new Date();
+    const weeklyStart = new Date(now);
+    weeklyStart.setHours(0, 0, 0, 0);
+    weeklyStart.setDate(weeklyStart.getDate() - 6);
+
+    const monthlyStart = new Date(now);
+    monthlyStart.setHours(0, 0, 0, 0);
+    monthlyStart.setDate(monthlyStart.getDate() - 29);
+
+    const periods: Record<string, PeriodDefinition> = {
+      today: {
+        statuses: [OrderStatus.pending, OrderStatus.confirmed],
+      },
+      weekly: {
+        statuses: [OrderStatus.shipped, OrderStatus.delivered],
+        startDate: weeklyStart,
+        endDate: now,
+      },
+      monthly: {
+        statuses: [OrderStatus.delivered],
+        startDate: monthlyStart,
+        endDate: now,
+      },
+      yearly: {
+        statuses: [OrderStatus.delivered],
+        startDate: getMonthOffset(now, -12),
+        endDate: now,
+      },
+    };
+
+    const periodGroups: Array<[string, OrderGroup[]]> = await Promise.all(
+      Object.entries(periods).map(
+        async ([period, definition]): Promise<[string, OrderGroup[]]> => {
+          if (territories.length === 0) return [period, []];
+
+          const where: Prisma.OrderWhereInput = {
+            status: { in: definition.statuses },
+            user: {
+              is: {
+                OR: territories,
+              },
+            },
+          };
+
+          if (definition.startDate && definition.endDate) {
+            where.createdAt = {
+              gte: definition.startDate,
+              lte: definition.endDate,
+            };
+          }
+
+          const groups = await prisma.order.groupBy({
+            by: ["userId", "status"],
+            where,
+            _count: { _all: true },
+            _sum: { totalAmount: true },
+          });
+          return [period, groups];
+        },
+      ),
+    );
+
+    const groupsByPeriod = new Map<string, OrderGroup[]>(periodGroups);
+    const customerIds = [
+      ...new Set(
+        periodGroups.flatMap(([, groups]) =>
+          groups.map((group) => group.userId),
+        ),
+      ),
+    ];
+    const customers = customerIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: customerIds } },
+          select: {
+            id: true,
+            divisionId: true,
+            districtId: true,
+            upazilaId: true,
+          },
+        })
+      : [];
+    const customerTerritories = new Map(
+      customers.map((customer) => [
+        customer.id,
+        customer.divisionId && customer.districtId && customer.upazilaId
+          ? territoryKey({
+              divisionId: customer.divisionId,
+              districtId: customer.districtId,
+              upazilaId: customer.upazilaId,
+            })
+          : null,
+      ]),
+    );
+
+    const buildPeriodSummary = (
+      period: string,
+      statuses: OrderStatus[],
+    ) => {
+      const total = { totalOrders: 0, totalOrderValue: 0 };
+      const statusTotals = Object.fromEntries(
+        statuses.map((status) => [status, { count: 0, value: 0 }]),
+      ) as Partial<StatusTotals>;
+      const tsrTotals = new Map<string, TsrPeriodTotals>(
+        tsrs.map((tsr) => [
+          tsr.id,
+          {
+            tsrId: tsr.id,
+            tsrName: tsr.name,
+            totalOrders: 0,
+            totalOrderValue: 0,
+            statuses: Object.fromEntries(
+              statuses.map((status) => [status, { count: 0, value: 0 }]),
+            ) as Partial<StatusTotals>,
+          },
+        ]),
+      );
+
+      for (const group of groupsByPeriod.get(period) ?? []) {
+        const count = group._count._all;
+        const value = Number(group._sum.totalAmount ?? 0);
+        const totalStatus = statusTotals[group.status]!;
+        total.totalOrders += count;
+        total.totalOrderValue += value;
+        totalStatus.count += count;
+        totalStatus.value += value;
+
+        const territory = customerTerritories.get(group.userId);
+        if (!territory) continue;
+        for (const tsr of tsrsByTerritory.get(territory) ?? []) {
+          const tsrTotal = tsrTotals.get(tsr.id)!;
+          const tsrStatus = tsrTotal.statuses[group.status]!;
+          tsrTotal.totalOrders += count;
+          tsrTotal.totalOrderValue += value;
+          tsrStatus.count += count;
+          tsrStatus.value += value;
+        }
+      }
+
+      const tsrBreakdown = [...tsrTotals.values()].map(
+        ({ statuses: _statuses, ...tsr }) => tsr,
+      );
+      const rank = (metric: "totalOrders" | "totalOrderValue") =>
+        tsrBreakdown.reduce<TsrRanking | null>(
+          (best, tsr) =>
+            tsr.totalOrders === 0 ||
+            (best && best[metric] >= tsr[metric])
+              ? best
+              : tsr,
+          null,
+        );
+
+      return {
+        ...total,
+        ...statusTotals,
+        tsrs: tsrBreakdown,
+        bestTsrByOrderCount: rank("totalOrders"),
+        bestTsrByOrderValue: rank("totalOrderValue"),
+      };
+    };
+
+    return Object.fromEntries(
+      Object.entries(periods).map(([period, definition]) => [
+        period,
+        buildPeriodSummary(period, definition.statuses),
+      ]),
+    );
+  }
+
   static async getSummary() {
     const statuses = await getStatusTotals();
     return summarizeTotals(statuses);

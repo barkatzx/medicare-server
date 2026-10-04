@@ -8,6 +8,7 @@ import { AdminTsrSalesController } from "./admin-tsr-sales.controller";
 const router = Router();
 
 router.use(authenticateToken, authorizeAdmin);
+router.get("/allsummary", AdminTsrSalesController.getAllSummary);
 router.get("/summary", AdminTsrSalesController.getSummary);
 router.get("/tsrs", AdminTsrSalesController.getTsrs);
 router.get("/tsrs/:tsrId/orders", AdminTsrSalesController.getTsrOrders);
