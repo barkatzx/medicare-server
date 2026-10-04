@@ -20,15 +20,39 @@ export class AdminTsrSalesController {
     }
   }
 
-  static async getAllSummary(_req: AuthRequest, res: Response) {
+  static async getAllSummary(req: AuthRequest, res: Response) {
+    const tsrId = req.query.tsrId;
+    if (typeof tsrId !== "string" || !isValidTsrId(tsrId)) {
+      return res.status(400).json({
+        success: false,
+        error: "A valid tsrId query parameter is required",
+      });
+    }
+
     try {
-      const data = await AdminTsrSalesService.getAllSummary();
+      const data = await AdminTsrSalesService.getAllSummary(tsrId);
+      if (!data) {
+        return res.status(404).json({ success: false, error: "TSR not found" });
+      }
       return res.status(200).json({ success: true, data });
     } catch (error) {
       console.error("Get all admin TSR sales summary error:", error);
       return res.status(500).json({
         success: false,
-        error: "Failed to fetch all TSR sales summaries",
+        error: "Failed to fetch TSR sales summary",
+      });
+    }
+  }
+
+  static async getBestPerformance(_req: AuthRequest, res: Response) {
+    try {
+      const data = await AdminTsrSalesService.getBestPerformance();
+      return res.status(200).json({ success: true, data });
+    } catch (error) {
+      console.error("Get admin TSR best performance error:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to fetch TSR best performance",
       });
     }
   }

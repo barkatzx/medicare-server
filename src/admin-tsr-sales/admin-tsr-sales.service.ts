@@ -141,9 +141,9 @@ const getOrderInclude = () => ({
 });
 
 export class AdminTsrSalesService {
-  static async getAllSummary() {
+  static async getAllSummary(tsrId?: string) {
     const tsrs = await prisma.user.findMany({
-      where: { role: "TSR" },
+      where: { role: "TSR", ...(tsrId ? { id: tsrId } : {}) },
       select: {
         id: true,
         name: true,
@@ -153,6 +153,8 @@ export class AdminTsrSalesService {
       },
       orderBy: { name: "asc" },
     });
+
+    if (tsrId && tsrs.length === 0) return null;
 
     const tsrsByTerritory = new Map<string, typeof tsrs>();
     for (const tsr of tsrs) {
@@ -336,6 +338,23 @@ export class AdminTsrSalesService {
       Object.entries(periods).map(([period, definition]) => [
         period,
         buildPeriodSummary(period, definition.statuses),
+      ]),
+    );
+  }
+
+  static async getBestPerformance() {
+    const summary = await this.getAllSummary();
+    if (!summary) {
+      throw new Error("Unable to calculate TSR best performance");
+    }
+
+    return Object.fromEntries(
+      Object.entries(summary).map(([period, data]) => [
+        period,
+        {
+          bestTsrByOrderCount: data.bestTsrByOrderCount,
+          bestTsrByOrderValue: data.bestTsrByOrderValue,
+        },
       ]),
     );
   }
