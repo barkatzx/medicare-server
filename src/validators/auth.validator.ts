@@ -22,7 +22,7 @@ export const validateRegister = [
 ];
 
 export const validateLogin = [
-  body("email").optional({ checkFalsy: true }).isEmail().normalizeEmail(),
+  body("email").optional({ checkFalsy: true }).isEmail(),
   body("phone_number")
     .optional({ checkFalsy: true })
     .isMobilePhone("any"),
