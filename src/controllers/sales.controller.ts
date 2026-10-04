@@ -198,7 +198,7 @@ export class SalesController {
       const items = await prisma.orderItem.findMany({
         where: {
           order: {
-            status: { in: ["pending", "confirmed"] },
+            status: "confirmed",
           },
         },
         select: {

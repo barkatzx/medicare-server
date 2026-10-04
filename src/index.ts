@@ -1,16 +1,15 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
-import { prisma } from "./config/supabase";
-import userRoutes from "./routes/user.routes";
-import categoryRoutes from "./routes/category.routes";
-import productRoutes from "./routes/product.routes";
-import orderRoutes from "./routes/order.routes";
-import salesRoutes from "./routes/sales.routes"; // Import sales routes
-import tsrRoutes from "./tsr/tsr.routes";
 import adminTsrSalesRoutes from "./admin-tsr-sales/admin-tsr-sales.routes";
-import { connectRedis } from "./config/redis";
-import redisClient from "./config/redis";
+import redisClient, { connectRedis } from "./config/redis";
+import { prisma } from "./config/supabase";
+import categoryRoutes from "./routes/category.routes";
+import orderRoutes from "./routes/order.routes";
+import productRoutes from "./routes/product.routes";
+import salesRoutes from "./routes/sales.routes"; // Import sales routes
+import userRoutes from "./routes/user.routes";
+import tsrRoutes from "./tsr/tsr.routes";
 // import { cacheMiddleware } from "./middleware/cache.middleware"; // Removed global cache
 
 dotenv.config();
