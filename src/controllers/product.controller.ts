@@ -502,10 +502,22 @@ export class ProductController {
   // Get trending products
   static async getTrendingProducts(req: Request, res: Response) {
     try {
-      const products = await ProductService.getTrendingProducts();
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = 20;
+      const { products, total } = await ProductService.getTrendingProducts(page);
       res.status(200).json({
         success: true,
-        data: products,
+        data: {
+          products,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            hasNextPage: page * limit < total,
+            hasPrevPage: page > 1,
+          },
+        },
       });
     } catch (error) {
       console.error("Get trending products error:", error);
@@ -519,10 +531,24 @@ export class ProductController {
   // Get featured products
   static async getFeaturedProducts(req: Request, res: Response) {
     try {
-      const products = await ProductService.getFeaturedProducts();
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = 20;
+      const { products, total } = await ProductService.getFeaturedProducts(
+        page,
+      );
       res.status(200).json({
         success: true,
-        data: products,
+        data: {
+          products,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            hasNextPage: page * limit < total,
+            hasPrevPage: page > 1,
+          },
+        },
       });
     } catch (error) {
       console.error("Get featured products error:", error);

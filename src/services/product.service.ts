@@ -42,18 +42,27 @@ export class ProductService {
    * Invalidates product-related caches
    */
   static async invalidateProductCaches() {
+    const [trendingKeys, featuredKeys] = await Promise.all([
+      redisClient.keys("products:trending*"),
+      redisClient.keys("products:featured*"),
+    ]);
+
     await redisClient.del(
-      "products:trending",
-      "products:featured",
       "products:new",
+      ...trendingKeys,
+      ...featuredKeys,
     );
   }
 
   /**
    * Get trending products (cached)
    */
-  static async getTrendingProducts() {
-    const cacheKey = "products:trending";
+  static async getTrendingProducts(
+    page: number = 1,
+  ): Promise<{ products: any[]; total: number }> {
+    const limit = 20;
+    const skip = (page - 1) * limit;
+    const cacheKey = `products:trending:${page}`;
     const cachedProducts = await redisClient.get(cacheKey);
 
     if (cachedProducts) {
@@ -64,36 +73,49 @@ export class ProductService {
       }
     }
 
-    const products = await prisma.product.findMany({
-      where: {
-        trending: true,
-        stock: { gt: 0 },
-      },
-      include: {
-        images: true,
-        category: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+    const where = {
+      trending: true,
+      stock: { gt: 0 },
+    };
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: {
+          images: true,
+          category: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.product.count({ where }),
+    ]);
 
-    const formattedProducts = this.formatProducts(products);
+    const result = {
+      products: this.formatProducts(products),
+      total,
+    };
 
     await redisClient.setex(
       cacheKey,
       this.CACHE_TTL,
-      JSON.stringify(formattedProducts),
+      JSON.stringify(result),
     );
 
-    return formattedProducts;
+    return result;
   }
 
   /**
    * Get featured products (cached)
    */
-  static async getFeaturedProducts() {
-    const cacheKey = "products:featured";
+  static async getFeaturedProducts(
+    page: number = 1,
+  ): Promise<{ products: any[]; total: number }> {
+    const limit = 20;
+    const skip = (page - 1) * limit;
+    const cacheKey = `products:featured:${page}`;
     const cachedProducts = await redisClient.get(cacheKey);
 
     if (cachedProducts) {
@@ -104,29 +126,38 @@ export class ProductService {
       }
     }
 
-    const products = await prisma.product.findMany({
-      where: {
-        featured: true,
-        stock: { gt: 0 },
-      },
-      include: {
-        images: true,
-        category: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+    const where = {
+      featured: true,
+      stock: { gt: 0 },
+    };
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: {
+          images: true,
+          category: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.product.count({ where }),
+    ]);
 
-    const formattedProducts = this.formatProducts(products);
+    const result = {
+      products: this.formatProducts(products),
+      total,
+    };
 
     await redisClient.setex(
       cacheKey,
       this.CACHE_TTL,
-      JSON.stringify(formattedProducts),
+      JSON.stringify(result),
     );
 
-    return formattedProducts;
+    return result;
   }
 
   /**
