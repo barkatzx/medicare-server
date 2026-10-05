@@ -24,6 +24,22 @@ const formatProductTp = <
   tp: product.tp == null ? null : Number(product.tp),
 });
 
+const parseStockStatusPagination = (query: Request["query"]) => {
+  const requestedPage =
+    typeof query.page === "string" ? Number.parseInt(query.page, 10) : NaN;
+  const requestedLimit =
+    typeof query.limit === "string" ? Number.parseInt(query.limit, 10) : NaN;
+  const page = Number.isInteger(requestedPage) && requestedPage > 0
+    ? requestedPage
+    : 1;
+  const limit =
+    Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 20)
+      : 20;
+
+  return { page, limit, skip: (page - 1) * limit };
+};
+
 type DistributorInputResult =
   | { ok: true; distributorId: string | null | undefined }
   | { ok: false; status: 400 | 404; error: string };
@@ -1164,35 +1180,95 @@ export class ProductController {
 
   static async getLowStockProducts(req: AuthRequest, res: Response) {
     try {
-      const threshold = parseInt(req.query.threshold as string) || 10;
+      const { page, limit, skip } = parseStockStatusPagination(req.query);
+      const where = {
+        stock: {
+          gt: 0,
+          lte: 20,
+        },
+      };
 
-      const products = await prisma.product.findMany({
-        where: {
-          stock: {
-            lte: threshold,
+      const [products, total] = await Promise.all([
+        prisma.product.findMany({
+          where,
+          include: {
+            category: true,
+            images: true,
+            distributor: {
+              select: { name: true },
+            },
           },
-        },
-        include: {
-          category: true,
-          images: true,
-          distributor: {
-            select: { name: true },
-          },
-        },
-        orderBy: {
-          stock: "asc",
-        },
-      });
+          orderBy: [{ stock: "asc" }, { id: "asc" }],
+          skip,
+          take: limit,
+        }),
+        prisma.product.count({ where }),
+      ]);
 
       res.status(200).json({
         success: true,
-        data: products.map(formatProductTp),
+        data: {
+          products: products.map(formatProductTp),
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            hasNextPage: page * limit < total,
+            hasPrevPage: page > 1,
+          },
+        },
       });
     } catch (error) {
       console.error("Get low stock products error:", error);
       res.status(500).json({
         success: false,
         error: "Failed to fetch low stock products",
+      });
+    }
+  }
+
+  static async getOutOfStockProducts(req: AuthRequest, res: Response) {
+    try {
+      const { page, limit, skip } = parseStockStatusPagination(req.query);
+      const where = { stock: 0 };
+
+      const [products, total] = await Promise.all([
+        prisma.product.findMany({
+          where,
+          include: {
+            category: true,
+            images: true,
+            distributor: {
+              select: { name: true },
+            },
+          },
+          orderBy: { id: "asc" },
+          skip,
+          take: limit,
+        }),
+        prisma.product.count({ where }),
+      ]);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          products: products.map(formatProductTp),
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+            hasNextPage: page * limit < total,
+            hasPrevPage: page > 1,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get out of stock products error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch out of stock products",
       });
     }
   }

@@ -26,6 +26,12 @@ router.get(
   authorizeAdmin,
   ProductController.getLowStockProducts,
 );
+router.get(
+  "/admin/out-of-stock",
+  authenticateToken,
+  authorizeAdmin,
+  ProductController.getOutOfStockProducts,
+);
 
 // ==================== ADMIN ROUTES ====================
 router.post(
