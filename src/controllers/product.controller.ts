@@ -6,10 +6,90 @@ import { ImageService } from "../services/image.service";
 import { AuthRequest } from "../types";
 import { ProductService } from "../services/product.service";
 
-const formatProductTp = <T extends { tp: unknown }>(product: T) => ({
+const formatProductTp = <
+  T extends {
+    tp: unknown;
+    distributorId?: string | null;
+    distributor?: { name: string } | string | null;
+  },
+>(
+  product: T,
+) => ({
   ...product,
+  distributor:
+    typeof product.distributor === "string"
+      ? product.distributor
+      : product.distributor?.name ?? null,
+  distributorId: product.distributorId ?? null,
   tp: product.tp == null ? null : Number(product.tp),
 });
+
+type DistributorInputResult =
+  | { ok: true; distributorId: string | null | undefined }
+  | { ok: false; status: 400 | 404; error: string };
+
+const resolveDistributorInput = async (
+  body: Record<string, unknown>,
+): Promise<DistributorInputResult> => {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, status: 400, error: "Invalid product request body" };
+  }
+
+  const hasDistributorId = Object.prototype.hasOwnProperty.call(
+    body,
+    "distributorId",
+  );
+  const hasDistributorName = Object.prototype.hasOwnProperty.call(
+    body,
+    "distributor",
+  );
+
+  if (hasDistributorId && hasDistributorName) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Provide either distributorId or distributor, not both",
+    };
+  }
+
+  if (!hasDistributorId && !hasDistributorName) {
+    return { ok: true, distributorId: undefined };
+  }
+
+  const value = hasDistributorId ? body.distributorId : body.distributor;
+  if (value === null || (typeof value === "string" && !value.trim())) {
+    return { ok: true, distributorId: null };
+  }
+  if (typeof value !== "string") {
+    return {
+      ok: false,
+      status: 400,
+      error: hasDistributorId
+        ? "Distributor ID must be a string"
+        : "Distributor must be a string",
+    };
+  }
+
+  const distributor = hasDistributorId
+    ? await prisma.distributor.findUnique({
+        where: { id: value.trim() },
+        select: { id: true },
+      })
+    : await prisma.distributor.findUnique({
+        where: { name: value.trim() },
+        select: { id: true },
+      });
+
+  if (!distributor) {
+    return {
+      ok: false,
+      status: 404,
+      error: "Distributor not found",
+    };
+  }
+
+  return { ok: true, distributorId: distributor.id };
+};
 
 export class ProductController {
   // Get all products with discount calculation
@@ -73,6 +153,9 @@ export class ProductController {
           include: {
             images: true,
             category: true,
+            distributor: {
+              select: { name: true },
+            },
           },
           skip,
           take: limit,
@@ -149,6 +232,9 @@ export class ProductController {
         include: {
           images: true,
           category: true,
+          distributor: {
+            select: { name: true },
+          },
         },
       });
 
@@ -215,7 +301,6 @@ export class ProductController {
         discountPercent,
         stock,
         categoryId,
-        distributor,
         tp,
       } = req.body;
 
@@ -238,10 +323,13 @@ export class ProductController {
         });
       }
 
-      const parsedDistributor =
-        typeof distributor === "string" && distributor.trim()
-          ? distributor.trim()
-          : null;
+      const distributorInput = await resolveDistributorInput(req.body);
+      if (!distributorInput.ok) {
+        return res.status(distributorInput.status).json({
+          success: false,
+          error: distributorInput.error,
+        });
+      }
       const parsedTp =
         tp == null || (typeof tp === "string" && tp.trim() === "")
           ? null
@@ -293,7 +381,7 @@ export class ProductController {
           discountedPrice: parsedDiscountedPrice,
           discountPercent: parsedDiscountPercent,
           stock: stock ? parseInt(stock) : 0,
-          distributor: parsedDistributor,
+          distributorId: distributorInput.distributorId,
           tp: parsedTp,
           categoryId,
           images:
@@ -311,6 +399,9 @@ export class ProductController {
         include: {
           images: true,
           category: true,
+          distributor: {
+            select: { name: true },
+          },
         },
       });
 
@@ -357,7 +448,6 @@ export class ProductController {
         discountPercent,
         stock,
         categoryId,
-        distributor,
         tp,
       } = req.body;
 
@@ -394,12 +484,13 @@ export class ProductController {
       const parsedDiscountPercent = discountPercent
         ? parseInt(discountPercent)
         : undefined;
-      const parsedDistributor =
-        distributor === undefined
-          ? undefined
-          : typeof distributor === "string" && distributor.trim()
-            ? distributor.trim()
-            : null;
+      const distributorInput = await resolveDistributorInput(req.body);
+      if (!distributorInput.ok) {
+        return res.status(distributorInput.status).json({
+          success: false,
+          error: distributorInput.error,
+        });
+      }
       const parsedTp =
         tp === undefined
           ? undefined
@@ -455,7 +546,7 @@ export class ProductController {
           discountedPrice: parsedDiscountedPrice,
           discountPercent: parsedDiscountPercent,
           stock: stock !== undefined ? parseInt(stock) : undefined,
-          distributor: parsedDistributor,
+          distributorId: distributorInput.distributorId,
           tp: parsedTp,
           categoryId: categoryId || undefined,
           images: newImagesData,
@@ -463,6 +554,9 @@ export class ProductController {
         include: {
           images: true,
           category: true,
+          distributor: {
+            select: { name: true },
+          },
         },
       });
 
@@ -828,6 +922,9 @@ export class ProductController {
         include: {
           images: true,
           category: true,
+          distributor: {
+            select: { name: true },
+          },
         },
         skip,
         take: limit,
@@ -874,7 +971,6 @@ export class ProductController {
         stock,
         categoryId,
         images,
-        distributor,
         tp,
       } = req.body;
 
@@ -891,6 +987,14 @@ export class ProductController {
         return res.status(400).json({
           success: false,
           error: "Price must be greater than 0",
+        });
+      }
+
+      const distributorInput = await resolveDistributorInput(req.body);
+      if (!distributorInput.ok) {
+        return res.status(distributorInput.status).json({
+          success: false,
+          error: distributorInput.error,
         });
       }
 
@@ -911,10 +1015,7 @@ export class ProductController {
           description,
           price,
           stock: stock || 0,
-          distributor:
-            typeof distributor === "string" && distributor.trim()
-              ? distributor.trim()
-              : null,
+          distributorId: distributorInput.distributorId,
           tp:
             tp == null || (typeof tp === "string" && tp.trim() === "")
               ? null
@@ -933,8 +1034,13 @@ export class ProductController {
         include: {
           images: true,
           category: true,
+          distributor: {
+            select: { name: true },
+          },
         },
       });
+
+      await ProductService.invalidateProductCaches();
 
       res.status(201).json({
         success: true,
@@ -1033,6 +1139,11 @@ export class ProductController {
       const updatedProduct = await prisma.product.update({
         where: { id },
         data: { stock: newStock },
+        include: {
+          distributor: {
+            select: { name: true },
+          },
+        },
       });
 
       await ProductService.invalidateProductCaches();
@@ -1064,6 +1175,9 @@ export class ProductController {
         include: {
           category: true,
           images: true,
+          distributor: {
+            select: { name: true },
+          },
         },
         orderBy: {
           stock: "asc",

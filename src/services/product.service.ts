@@ -22,6 +22,8 @@ export class ProductService {
         discountedPrice: product.discountedPrice
           ? Number(product.discountedPrice)
           : null,
+        distributor: product.distributor?.name ?? null,
+        distributorId: product.distributorId,
         tp: product.tp == null ? null : Number(product.tp),
         finalPrice,
         savings: DiscountService.calculateSavings(
@@ -83,6 +85,9 @@ export class ProductService {
         include: {
           images: true,
           category: true,
+          distributor: {
+            select: { name: true },
+          },
         },
         orderBy: {
           createdAt: "desc",
@@ -136,6 +141,9 @@ export class ProductService {
         include: {
           images: true,
           category: true,
+          distributor: {
+            select: { name: true },
+          },
         },
         orderBy: {
           createdAt: "desc",
@@ -175,6 +183,9 @@ export class ProductService {
       include: {
         images: true,
         category: true,
+        distributor: {
+          select: { name: true },
+        },
       },
     });
 
@@ -196,6 +207,9 @@ export class ProductService {
       include: {
         images: true,
         category: true,
+        distributor: {
+          select: { name: true },
+        },
       },
     });
 
@@ -241,6 +255,9 @@ export class ProductService {
         include: {
           images: true,
           category: true,
+          distributor: {
+            select: { name: true },
+          },
         },
         orderBy: {
           createdAt: "desc",

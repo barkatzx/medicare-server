@@ -2,6 +2,12 @@ import { NextFunction, Request, Response } from "express";
 import { body, validationResult } from "express-validator";
 
 const productFieldValidators = [
+  body("distributorId")
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .notEmpty()
+    .withMessage("Distributor ID must be a non-empty string"),
   body("distributor")
     .optional({ nullable: true })
     .isString()

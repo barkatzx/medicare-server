@@ -5,6 +5,7 @@ import adminTsrSalesRoutes from "./admin-tsr-sales/admin-tsr-sales.routes";
 import redisClient, { connectRedis } from "./config/redis";
 import { prisma } from "./config/supabase";
 import categoryRoutes from "./routes/category.routes";
+import distributorRoutes from "./routes/distributor.routes";
 import orderRoutes from "./routes/order.routes";
 import productRoutes from "./routes/product.routes";
 import salesRoutes from "./routes/sales.routes"; // Import sales routes
@@ -30,6 +31,7 @@ connectRedis();
 // Routes
 app.use("/v1/users", userRoutes);
 app.use("/v1/categories", categoryRoutes);
+app.use("/v1", distributorRoutes);
 app.use("/v1/products", productRoutes);
 app.use("/v1/orders", orderRoutes);
 app.use("/v1/tsr", tsrRoutes);

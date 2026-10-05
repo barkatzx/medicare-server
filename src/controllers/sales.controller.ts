@@ -208,7 +208,9 @@ export class SalesController {
             select: {
               id: true,
               name: true,
-              distributor: true,
+              distributor: {
+                select: { name: true },
+              },
               price: true,
               tp: true,
             },
@@ -234,7 +236,7 @@ export class SalesController {
         if (!prod) {
           prod = {
             productName: item.product.name,
-            distributor: item.product.distributor,
+            distributor: item.product.distributor?.name ?? null,
             quantity: 0,
             price: Number(item.product.price),
             tp: item.product.tp == null ? null : Number(item.product.tp),

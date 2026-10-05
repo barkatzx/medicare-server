@@ -142,6 +142,14 @@ model Category {
   updatedAt DateTime @updatedAt
 }
 
+model Distributor {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
 model Product {
   id          String @id @default(uuid())
   name        String
@@ -150,7 +158,8 @@ model Product {
   discountedPrice Decimal? @db.Decimal(10, 2)
   discountPercent Int? @default(0)
   stock       Int     @default(0)
-  distributor String?
+  distributorId String?
+  distributor Distributor? @relation(fields: [distributorId], references: [id], onDelete: Restrict)
   tp          Decimal? @db.Decimal(10, 2)
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
@@ -162,6 +171,7 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([categoryId])
+  @@index([distributorId])
   @@index([name])
   @@index([price])
   @@index([stock])
