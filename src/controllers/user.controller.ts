@@ -316,9 +316,17 @@ export class UserController {
   // Get all users (admin only)
   static async getAllUsers(req: AuthRequest, res: Response) {
     try {
-      const { page = 1, limit = 20, role, isApproved } = req.query; // ← limit default: 10 → 20
+      const { page = 1, limit = 20, role, isApproved, search } = req.query; // ← limit default: 10 → 20
 
       const where: Record<string, any> = {};
+
+      const searchTerm = typeof search === "string" ? search.trim() : "";
+      if (searchTerm) {
+        where.OR = [
+          { email: { contains: searchTerm, mode: "insensitive" } },
+          { phone_number: { contains: searchTerm } },
+        ];
+      }
 
       if (role !== undefined) {
         if (!VALID_ROLES.includes(role as ValidRole)) {
