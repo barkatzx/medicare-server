@@ -1,5 +1,6 @@
 import { OrderStatus, Prisma } from "@prisma/client";
 import { prisma } from "../config/supabase";
+import { invalidateOrderDataCaches } from "../services/cache.service";
 import {
   ORDER_STATUS_FILTERS,
   isValidOrderStatusFilter,
@@ -362,6 +363,7 @@ export class TsrService {
       data: { status: status as TsrStatus },
       include: this.getOrderBaseInclude(),
     });
+    await invalidateOrderDataCaches();
 
     await prisma.notification.create({
       data: {

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../config/supabase";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { AuthService } from "../services/auth.service";
+import { invalidateOrderDataCaches } from "../services/cache.service";
 import redisClient from "../config/redis";
 interface AddressInput {
   street: string;
@@ -217,6 +218,13 @@ export class UserController {
           upazilaId: true,
         },
       });
+      if (
+        divisionId !== undefined ||
+        districtId !== undefined ||
+        upazilaId !== undefined
+      ) {
+        await invalidateOrderDataCaches();
+      }
 
       res.status(200).json({
         message: "Profile updated successfully",
@@ -250,6 +258,7 @@ export class UserController {
       await prisma.user.delete({
         where: { id: userId },
       });
+      await invalidateOrderDataCaches();
 
       // Clear user's Redis cache
       try {
@@ -431,6 +440,7 @@ export class UserController {
           error: "Only customers can be promoted to TSR",
         });
       }
+      await invalidateOrderDataCaches();
 
       const updatedUser = await prisma.user.findUnique({
         where: { id: userId },

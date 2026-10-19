@@ -6,7 +6,7 @@ import {
   authorizeAdmin,
   authorizeApproved,
 } from "../middleware/auth.middleware";
-import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
+import { cacheRoute } from "../middleware/cache.middleware";
 
 const router = Router();
 
@@ -15,30 +15,26 @@ router.post(
   "/",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/v1/orders*"),
-  invalidateCache("cache:*:*sales*"),
   OrderController.createOrder,
 );
 router.get(
   "/my-orders",
   authenticateToken,
   authorizeApproved,
-  cacheRoute(300),
+  cacheRoute(60, "orders-v1", ["orders"]),
   OrderController.getMyOrders,
 );
 router.get(
   "/my-orders/:orderId",
   authenticateToken,
   authorizeApproved,
-  cacheRoute(3600),
+  cacheRoute(60, "orders-v1", ["orders"]),
   OrderController.getMyOrderById,
 );
 router.put(
   "/:orderId/cancel",
   authenticateToken,
   authorizeApproved,
-  invalidateCache("cache:{userId}:/v1/orders*"),
-  invalidateCache("cache:*:*sales*"),
   OrderController.cancelOrder,
 );
 
@@ -47,29 +43,26 @@ router.get(
   "/",
   authenticateToken,
   authorizeAdmin,
-  cacheRoute(300),
+  cacheRoute(60, "orders-v1", ["orders"]),
   OrderController.getAllOrders,
 );
 router.get(
   "/:orderId",
   authenticateToken,
   authorizeAdmin,
-  cacheRoute(3600),
+  cacheRoute(60, "orders-v1", ["orders"]),
   OrderController.getOrderById,
 );
 router.put(
   "/:orderId/status",
   authenticateToken,
   authorizeAdmin,
-  invalidateCache("cache:*:*orders*"),
-  invalidateCache("cache:*:*sales*"),
   OrderController.updateOrderStatus,
 );
 router.put(
   "/:orderId/payment/confirm",
   authenticateToken,
   authorizeAdmin,
-  invalidateCache("cache:*:*sales*"),
   OrderController.confirmPaymentCOD,
 );
 

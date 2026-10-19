@@ -2,6 +2,7 @@
 import { Response } from "express";
 import { prisma } from "../config/supabase";
 import { DiscountService } from "../services/discount.service";
+import { invalidateOrderDataCaches } from "../services/cache.service";
 import { AuthRequest } from "../types";
 
 interface CreateOrderBody {
@@ -169,6 +170,8 @@ export class OrderController {
       }, {
         timeout: 300000 // 300 seconds (5 minutes) timeout to handle massive orders (100-500+ products)
       });
+
+      await invalidateOrderDataCaches();
 
       return res.status(201).json({
         success: true,
@@ -365,6 +368,8 @@ export class OrderController {
         return updatedOrder;
       });
 
+      await invalidateOrderDataCaches();
+
       res.status(200).json({
         success: true,
         data: result,
@@ -389,6 +394,27 @@ export class OrderController {
       const where: any = {};
       if (status) {
         where.status = status;
+      }
+
+      // Order ID is the UUID primary key; search by full ID or trailing 8+ chars
+      if (req.query.search !== undefined) {
+        if (typeof req.query.search !== "string") {
+          return res.status(400).json({
+            success: false,
+            error: "Invalid search parameter",
+          });
+        }
+        const search = req.query.search.trim().replace(/^#/, "");
+        if (search) {
+          if (!/^[0-9a-fA-F-]{8,36}$/.test(search)) {
+            return res.status(400).json({
+              success: false,
+              error:
+                "Search must be the last 8 characters (or more) of an Order ID",
+            });
+          }
+          where.id = { endsWith: search.toLowerCase() };
+        }
       }
 
       const orders = await prisma.order.findMany({
@@ -526,6 +552,7 @@ export class OrderController {
         where: { id: orderId },
         data: { status },
       });
+      await invalidateOrderDataCaches();
 
       // Create notification for user
       await prisma.notification.create({
@@ -583,6 +610,7 @@ export class OrderController {
           paidAt: new Date(),
         },
       });
+      await invalidateOrderDataCaches();
 
       // Create notification
       await prisma.notification.create({

@@ -1,6 +1,7 @@
 import { Response, NextFunction } from "express";
 import redisClient from "../config/redis";
 import { AuthRequest } from "../types";
+import { getCacheTagVersionSuffix } from "../services/cache.service";
 
 // Map to track in-flight requests for cache stampede protection
 const inFlightRequests = new Map<string, Promise<any>>();
@@ -9,7 +10,11 @@ const inFlightRequests = new Map<string, Promise<any>>();
  * Middleware to cache route responses
  * @param ttlSeconds Time to live in seconds
  */
-export const cacheRoute = (ttlSeconds: number, cacheVersion?: string) => {
+export const cacheRoute = (
+  ttlSeconds: number,
+  cacheVersion?: string,
+  cacheTags: string[] = [],
+) => {
   return async (req: AuthRequest, res: Response, next: NextFunction) => {
     // Only cache GET requests
     if (req.method !== "GET") {
@@ -18,14 +23,18 @@ export const cacheRoute = (ttlSeconds: number, cacheVersion?: string) => {
 
     const userId = req.user?.id || "public";
     const versionSuffix = cacheVersion ? `:${cacheVersion}` : "";
-    const key = `cache:${userId}:${req.originalUrl}${versionSuffix}`;
+    let key: string | undefined;
 
     try {
+      const tagVersionSuffix = await getCacheTagVersionSuffix(cacheTags);
+      const cacheKey = `cache:${userId}:${req.originalUrl}${versionSuffix}${tagVersionSuffix}`;
+      key = cacheKey;
+
       // 1. Check Redis
-      const cachedData = await redisClient.get(key);
+      const cachedData = await redisClient.get(cacheKey);
 
       if (cachedData) {
-        console.log(`[Cache] HIT: ${key}`);
+        console.log(`[Cache] HIT: ${cacheKey}`);
         try {
           return res.status(200).json(JSON.parse(cachedData));
         } catch (e) {
@@ -34,12 +43,12 @@ export const cacheRoute = (ttlSeconds: number, cacheVersion?: string) => {
         }
       }
 
-      console.log(`[Cache] MISS: ${key}`);
+      console.log(`[Cache] MISS: ${cacheKey}`);
 
       // 2. Stampede Protection: Check if another request is already fetching this
-      if (inFlightRequests.has(key)) {
-        console.log(`[Cache] STAMPEDE PROTECTION: Waiting for in-flight request: ${key}`);
-        const data = await inFlightRequests.get(key);
+      if (inFlightRequests.has(cacheKey)) {
+        console.log(`[Cache] STAMPEDE PROTECTION: Waiting for in-flight request: ${cacheKey}`);
+        const data = await inFlightRequests.get(cacheKey);
         return res.status(200).json(data);
       }
 
@@ -51,19 +60,19 @@ export const cacheRoute = (ttlSeconds: number, cacheVersion?: string) => {
       const inFlightPromise = new Promise((resolve) => {
         resolveInFlight = resolve;
       });
-      inFlightRequests.set(key, inFlightPromise);
+      inFlightRequests.set(cacheKey, inFlightPromise);
 
       res.json = (body: any) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           const valueToCache = typeof body === "string" ? body : JSON.stringify(body);
           redisClient
-            .setex(key, ttlSeconds, valueToCache)
+            .setex(cacheKey, ttlSeconds, valueToCache)
             .catch((error) => console.error("Redis Cache Write Error:", error));
         }
         
         // Resolve the in-flight promise and cleanup
         resolveInFlight(body);
-        inFlightRequests.delete(key);
+        inFlightRequests.delete(cacheKey);
         
         return originalJson(body);
       };
@@ -71,7 +80,7 @@ export const cacheRoute = (ttlSeconds: number, cacheVersion?: string) => {
       next();
     } catch (error) {
       console.error("Redis Cache Error:", error);
-      inFlightRequests.delete(key);
+      if (key) inFlightRequests.delete(key);
       next();
     }
   };

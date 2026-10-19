@@ -27,14 +27,14 @@ router.get("/yearly", SalesController.getYearlySales);
 // Sales summary (overall statistics)
 router.get(
   "/summary",
-  cacheRoute(300, "sales-summary-v3"),
+  cacheRoute(300, "sales-summary-v3", ["sales"]),
   SalesController.getSalesSummary,
 );
 
 // Today's ordered products summary
 router.get(
   "/today-ordered-products",
-  cacheRoute(300, "ordered-products-v2"),
+  cacheRoute(300, "ordered-products-v2", ["sales"]),
   SalesController.getTodayOrderedProducts,
 );
 
