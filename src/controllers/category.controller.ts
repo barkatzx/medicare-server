@@ -10,6 +10,109 @@ const hasPrismaErrorCode = (error: unknown, code: string) =>
   "code" in error &&
   error.code === code;
 
+type DistributorBody = {
+  name?: string;
+  fullAddress?: string | null;
+  divisionId?: string | null;
+  districtId?: string | null;
+  upazilaId?: string | null;
+};
+
+function isDistributorBody(
+  body: unknown,
+  requireName: boolean,
+): body is DistributorBody {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return false;
+  }
+
+  const input = body as Record<string, unknown>;
+  const allowedFields = [
+    "name",
+    "fullAddress",
+    "divisionId",
+    "districtId",
+    "upazilaId",
+  ];
+  if (
+    Object.keys(input).length === 0 ||
+    Object.keys(input).some((key) => !allowedFields.includes(key)) ||
+    (requireName && !("name" in input))
+  ) {
+    return false;
+  }
+
+  if (
+    "name" in input &&
+    (typeof input.name !== "string" || !input.name.trim())
+  ) {
+    return false;
+  }
+  if (
+    "fullAddress" in input &&
+    input.fullAddress !== null &&
+    typeof input.fullAddress !== "string"
+  ) {
+    return false;
+  }
+  for (const field of ["divisionId", "districtId", "upazilaId"] as const) {
+    if (
+      field in input &&
+      input[field] !== null &&
+      (typeof input[field] !== "string" || !input[field].trim())
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function validateDistributorLocations(
+  divisionId: string | null | undefined,
+  districtId: string | null | undefined,
+  upazilaId: string | null | undefined,
+): Promise<string | null> {
+  const [division, district, upazila] = await Promise.all([
+    divisionId
+      ? prisma.division.findUnique({
+          where: { id: divisionId },
+          select: { id: true },
+        })
+      : null,
+    districtId
+      ? prisma.district.findUnique({
+          where: { id: districtId },
+          select: { id: true, divisionId: true },
+        })
+      : null,
+    upazilaId
+      ? prisma.upazila.findUnique({
+          where: { id: upazilaId },
+          select: { id: true, districtId: true },
+        })
+      : null,
+  ]);
+
+  if (divisionId && !division) {
+    return "Division not found";
+  }
+  if (districtId && !district) {
+    return "District not found";
+  }
+  if (upazilaId && !upazila) {
+    return "Upazila not found";
+  }
+  if (divisionId && districtId && district?.divisionId !== divisionId) {
+    return "District does not belong to the selected division";
+  }
+  if (districtId && upazilaId && upazila?.districtId !== districtId) {
+    return "Upazila does not belong to the selected district";
+  }
+
+  return null;
+}
+
 export class CategoryController {
   static async getAllCategories(req: Request, res: Response) {
     try {
@@ -289,6 +392,11 @@ export class CategoryController {
   static async getAllDistributor(_req: Request, res: Response) {
     try {
       const distributors = await prisma.distributor.findMany({
+        include: {
+          division: { select: { id: true, name: true } },
+          district: { select: { id: true, name: true } },
+          upazila: { select: { id: true, name: true } },
+        },
         orderBy: { name: "asc" },
       });
 
@@ -307,27 +415,34 @@ export class CategoryController {
 
   static async createDistributor(req: AuthRequest, res: Response) {
     try {
-      const body = req.body;
-      if (
-        !body ||
-        typeof body !== "object" ||
-        Array.isArray(body) ||
-        Object.keys(body).some((key) => key !== "name")
-      ) {
+      const body: unknown = req.body;
+      if (!isDistributorBody(body, true)) {
         return res.status(400).json({
           success: false,
-          error: "Only the name field is allowed",
+          error:
+            "A distributor name and only supported address and location fields are allowed",
         });
       }
 
-      if (typeof body.name !== "string" || !body.name.trim()) {
+      const name = body.name?.trim();
+      if (!name) {
         return res.status(400).json({
           success: false,
           error: "Distributor name is required",
         });
       }
+      const locationError = await validateDistributorLocations(
+        body.divisionId,
+        body.districtId,
+        body.upazilaId,
+      );
+      if (locationError) {
+        return res.status(400).json({
+          success: false,
+          error: locationError,
+        });
+      }
 
-      const name = body.name.trim();
       const existingDistributor = await prisma.distributor.findUnique({
         where: { name },
       });
@@ -339,7 +454,18 @@ export class CategoryController {
       }
 
       const distributor = await prisma.distributor.create({
-        data: { name },
+        data: {
+          name,
+          fullAddress: body.fullAddress ?? null,
+          divisionId: body.divisionId ?? null,
+          districtId: body.districtId ?? null,
+          upazilaId: body.upazilaId ?? null,
+        },
+        include: {
+          division: { select: { id: true, name: true } },
+          district: { select: { id: true, name: true } },
+          upazila: { select: { id: true, name: true } },
+        },
       });
 
       return res.status(201).json({
@@ -355,6 +481,12 @@ export class CategoryController {
           error: "Distributor with this name already exists",
         });
       }
+      if (hasPrismaErrorCode(error, "P2003")) {
+        return res.status(400).json({
+          success: false,
+          error: "One or more location IDs are invalid",
+        });
+      }
       return res.status(500).json({
         success: false,
         error: "Failed to create distributor",
@@ -366,6 +498,11 @@ export class CategoryController {
     try {
       const distributor = await prisma.distributor.findUnique({
         where: { id: req.params.id },
+        include: {
+          division: { select: { id: true, name: true } },
+          district: { select: { id: true, name: true } },
+          upazila: { select: { id: true, name: true } },
+        },
       });
 
       if (!distributor) {
@@ -390,22 +527,11 @@ export class CategoryController {
 
   static async updateDistributor(req: AuthRequest, res: Response) {
     try {
-      const body = req.body;
-      if (
-        !body ||
-        typeof body !== "object" ||
-        Array.isArray(body) ||
-        Object.keys(body).some((key) => key !== "name")
-      ) {
+      const body: unknown = req.body;
+      if (!isDistributorBody(body, false)) {
         return res.status(400).json({
           success: false,
-          error: "Only the name field is allowed",
-        });
-      }
-      if (typeof body.name !== "string" || !body.name.trim()) {
-        return res.status(400).json({
-          success: false,
-          error: "Distributor name is required",
+          error: "Only supported name, address, and location fields are allowed",
         });
       }
 
@@ -420,20 +546,66 @@ export class CategoryController {
         });
       }
 
-      const name = body.name.trim();
-      const distributorWithName = await prisma.distributor.findUnique({
-        where: { name },
-      });
-      if (distributorWithName && distributorWithName.id !== id) {
-        return res.status(409).json({
-          success: false,
-          error: "Distributor with this name already exists",
+      if (body.name !== undefined) {
+        const name = body.name.trim();
+        const distributorWithName = await prisma.distributor.findUnique({
+          where: { name },
         });
+        if (distributorWithName && distributorWithName.id !== id) {
+          return res.status(409).json({
+            success: false,
+            error: "Distributor with this name already exists",
+          });
+        }
       }
 
+      if (
+        body.divisionId !== undefined ||
+        body.districtId !== undefined ||
+        body.upazilaId !== undefined
+      ) {
+        const locationError = await validateDistributorLocations(
+          body.divisionId === undefined
+            ? existingDistributor.divisionId
+            : body.divisionId,
+          body.districtId === undefined
+            ? existingDistributor.districtId
+            : body.districtId,
+          body.upazilaId === undefined
+            ? existingDistributor.upazilaId
+            : body.upazilaId,
+        );
+        if (locationError) {
+          return res.status(400).json({
+            success: false,
+            error: locationError,
+          });
+        }
+      }
+
+      const data = {
+        ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+        ...(body.fullAddress !== undefined
+          ? { fullAddress: body.fullAddress }
+          : {}),
+        ...(body.divisionId !== undefined
+          ? { divisionId: body.divisionId }
+          : {}),
+        ...(body.districtId !== undefined
+          ? { districtId: body.districtId }
+          : {}),
+        ...(body.upazilaId !== undefined
+          ? { upazilaId: body.upazilaId }
+          : {}),
+      };
       const distributor = await prisma.distributor.update({
         where: { id },
-        data: { name },
+        data,
+        include: {
+          division: { select: { id: true, name: true } },
+          district: { select: { id: true, name: true } },
+          upazila: { select: { id: true, name: true } },
+        },
       });
 
       return res.status(200).json({
@@ -453,6 +625,12 @@ export class CategoryController {
         return res.status(404).json({
           success: false,
           error: "Distributor not found",
+        });
+      }
+      if (hasPrismaErrorCode(error, "P2003")) {
+        return res.status(400).json({
+          success: false,
+          error: "One or more location IDs are invalid",
         });
       }
       return res.status(500).json({

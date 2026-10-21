@@ -81,6 +81,7 @@ model Division {
   bnName    String?
   districts District[]
   users     User[]    @relation("UserDivision")
+  distributors Distributor[] @relation("DistributorDivision")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -94,6 +95,7 @@ model District {
   division   Division  @relation(fields: [divisionId], references: [id])
   upazilas   Upazila[]
   users      User[]    @relation("UserDistrict")
+  distributors Distributor[] @relation("DistributorDistrict")
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -109,6 +111,7 @@ model Upazila {
   districtId String
   district   District @relation(fields: [districtId], references: [id])
   users      User[]   @relation("UserUpazila")
+  distributors Distributor[] @relation("DistributorUpazila")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -143,11 +146,22 @@ model Category {
 }
 
 model Distributor {
-  id        String    @id @default(uuid())
-  name      String    @unique
-  products  Product[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id          String    @id @default(uuid())
+  name        String    @unique
+  fullAddress String?
+  divisionId  String?   @db.Uuid
+  districtId  String?   @db.Uuid
+  upazilaId   String?   @db.Uuid
+  division    Division? @relation("DistributorDivision", fields: [divisionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  district    District? @relation("DistributorDistrict", fields: [districtId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  upazila     Upazila?  @relation("DistributorUpazila", fields: [upazilaId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([divisionId])
+  @@index([districtId])
+  @@index([upazilaId])
 }
 
 model Product {
@@ -188,6 +202,7 @@ model ProductImage {
   product   Product @relation(fields: [productId], references: [id])
   isDefault Boolean @default(false)
   createdAt DateTime @default(now())
+
   @@index([productId])
 }
 
