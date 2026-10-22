@@ -6,10 +6,14 @@ import redisClient from "../config/redis";
  * @param limit Number of requests allowed
  * @param windowSeconds Time window in seconds
  */
-export const rateLimit = (limit: number, windowSeconds: number) => {
+export const rateLimit = (
+  limit: number,
+  windowSeconds: number,
+  scope?: string,
+) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
-    const key = `ratelimit:${req.path}:${ip}`;
+    const key = `ratelimit:${scope ?? req.path}:${ip}`;
 
     try {
       const current = await redisClient.get(key);

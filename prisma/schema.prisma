@@ -43,6 +43,36 @@ enum DiscountType {
   fixed
 }
 
+enum CareerEmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
+}
+
+enum CareerWorkplaceType {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum CareerJobStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum CareerApplicationStatus {
+  NEW
+  REVIEWING
+  SHORTLISTED
+  INTERVIEW
+  REJECTED
+  HIRED
+}
+
 model User {
   id               String    @id @default(uuid())
   email            String    @unique
@@ -64,6 +94,8 @@ model User {
   orders           Order[]
   addresses        Address[]
   notifications    Notification[]
+  careerJobs       CareerJob[] @relation("CareerJobCreator")
+  reviewedApplications CareerApplication[] @relation("CareerApplicationReviewer")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -282,4 +314,68 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
+}
+
+model CareerJob {
+  id                  String              @id @default(uuid()) @db.Uuid
+  title               String
+  slug                String              @unique
+  department          String
+  employmentType      CareerEmploymentType
+  workplaceType       CareerWorkplaceType
+  location            String
+  shortDescription    String
+  description         String
+  responsibilities    String?
+  requirements        String?
+  qualifications      String?
+  salaryMin           Decimal?            @db.Decimal(12, 2)
+  salaryMax           Decimal?            @db.Decimal(12, 2)
+  salaryCurrency      String?
+  applicationDeadline DateTime?           @db.Timestamptz(3)
+  status              CareerJobStatus     @default(DRAFT)
+  publishedAt         DateTime?           @db.Timestamptz(3)
+  createdById         String?             @db.Uuid
+  createdBy           User?               @relation("CareerJobCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  applications        CareerApplication[]
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@index([status, publishedAt])
+  @@index([department])
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+model CareerApplication {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  jobId              String                   @db.Uuid
+  job                CareerJob                @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  fullName           String
+  email              String
+  phone              String
+  currentLocation    String?
+  education          String?
+  experienceYears    Int?
+  currentCompany     String?
+  portfolioUrl       String?
+  linkedinUrl        String?
+  coverLetter        String?
+  resumeStoragePath  String
+  resumeOriginalName String
+  resumeMimeType     String
+  resumeSizeBytes    Int
+  status             CareerApplicationStatus @default(NEW)
+  adminNotes         String?
+  reviewedById       String?                  @db.Uuid
+  reviewedBy         User?                    @relation("CareerApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt         DateTime?                @db.Timestamptz(3)
+  createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                 @updatedAt @db.Timestamptz(3)
+
+  @@index([jobId, createdAt])
+  @@index([status, createdAt])
+  @@index([email])
+  @@index([createdAt])
+  @@index([reviewedById])
 }
