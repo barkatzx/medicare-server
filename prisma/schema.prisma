@@ -22,6 +22,12 @@ enum OrderStatus {
   cancelled
 }
 
+enum NotificationType {
+  order
+  approval
+  system
+}
+
 enum PaymentMethod {
   cod
 }
@@ -76,6 +82,7 @@ model User {
   role                 Role                @default(customer)
   password             String
   isApproved           Boolean             @default(false)
+  defaultAddressId     String?   @unique
   fullAddress          String?
   divisionId           String?
   districtId           String?
@@ -85,6 +92,8 @@ model User {
   upazila              Upazila?            @relation("UserUpazila", fields: [upazilaId], references: [id])
   cart                 Cart?
   orders               Order[]
+  addresses            Address[]
+  notifications        Notification[]
   careerJobs           CareerJob[]         @relation("CareerJobCreator")
   reviewedApplications CareerApplication[] @relation("CareerApplicationReviewer")
   createdAt            DateTime            @default(now())
@@ -140,6 +149,39 @@ model Upazila {
 
   @@unique([districtId, name])
   @@index([districtId])
+}
+
+model Address {
+  id         String  @id @default(uuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id])
+  street     String
+  city       String
+  state      String?
+  postalCode String?
+  country    String
+  isDefault  Boolean @default(false)
+  orders     Order[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isDefault])
+}
+
+model Notification {
+  id      String           @id @default(uuid())
+  userId  String
+  user    User             @relation(fields: [userId], references: [id])
+  title   String
+  message String
+  type    NotificationType
+  isRead  Boolean          @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
 }
 
 model Category {
@@ -240,6 +282,8 @@ model Order {
   id          String      @id @default(uuid())
   userId      String
   user        User        @relation(fields: [userId], references: [id])
+  shippingAddressId String
+  shippingAddress   Address @relation(fields: [shippingAddressId], references: [id])
   totalAmount Decimal     @db.Decimal(10, 2)
   status      OrderStatus @default(pending)
   payment     Payment?

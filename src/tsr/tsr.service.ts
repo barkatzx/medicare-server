@@ -82,6 +82,7 @@ export class TsrService {
         },
       },
       payment: true,
+      shippingAddress: true,
     } as const;
   }
 
@@ -364,6 +365,14 @@ export class TsrService {
     });
     await invalidateOrderDataCaches();
 
+    await prisma.notification.create({
+      data: {
+        userId: order.userId,
+        title: "Order Status Updated",
+        message: `Your order #${orderId} status has been updated to: ${status}`,
+        type: "order",
+      },
+    });
 
     return {
       success: true,
