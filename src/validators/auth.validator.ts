@@ -6,11 +6,11 @@ export const validateRegister = [
   body("phone_number").isMobilePhone("any"),
   body("password").isLength({ min: 6 }),
   body("name").optional().isString(),
-  body("pharmacy_name").optional().isString(),
-  body("fullAddress").optional().isString(),
-  body("divisionId").optional().isUUID(),
-  body("districtId").optional().isUUID(),
-  body("upazilaId").optional().isUUID(),
+  body("pharmacy_name").isString().trim().notEmpty(),
+  body("fullAddress").isString().trim().notEmpty(),
+  body("divisionId").isUUID(),
+  body("districtId").isUUID(),
+  body("upazilaId").isUUID(),
   body("role").optional().isIn(["customer"]),
   (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);

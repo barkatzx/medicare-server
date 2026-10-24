@@ -6,7 +6,6 @@ import { invalidateOrderDataCaches } from "../services/cache.service";
 import { AuthRequest } from "../types";
 
 interface CreateOrderBody {
-  shippingAddressId: string;
   paymentMethod?: "cod";
 }
 
@@ -18,28 +17,27 @@ export class OrderController {
   static async createOrder(req: AuthRequest, res: Response) {
     try {
       const userId = req.user!.id;
-      const { shippingAddressId, paymentMethod = "cod" } =
-        req.body as CreateOrderBody;
+      const { paymentMethod = "cod" } = req.body as CreateOrderBody;
 
-      if (!shippingAddressId) {
-        return res.status(400).json({
-          success: false,
-          error: "Shipping address is required",
-        });
-      }
-
-      // Verify address belongs to user
-      const address = await prisma.address.findFirst({
-        where: {
-          id: shippingAddressId,
-          userId,
+      const registered = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          fullAddress: true,
+          divisionId: true,
+          districtId: true,
+          upazilaId: true,
         },
       });
 
-      if (!address) {
-        return res.status(404).json({
+      if (
+        !registered?.fullAddress ||
+        !registered.divisionId ||
+        !registered.districtId ||
+        !registered.upazilaId
+      ) {
+        return res.status(400).json({
           success: false,
-          error: "Shipping address not found",
+          error: "Please complete your address in My Address before ordering",
         });
       }
 
@@ -103,7 +101,6 @@ export class OrderController {
         const order = await tx.order.create({
           data: {
             userId,
-            shippingAddressId,
             totalAmount,
             status: "pending",
             items: {
@@ -123,7 +120,6 @@ export class OrderController {
               },
             },
             payment: true,
-            shippingAddress: true,
           },
         });
 
@@ -150,20 +146,6 @@ export class OrderController {
         // Clear cart
         await tx.cartItem.deleteMany({
           where: { cartId: cart.id },
-        });
-
-        // Create notification with savings info
-        const totalSavings = totalOriginalAmount - totalAmount;
-        const savingsMessage =
-          totalSavings > 0 ? ` You saved ${totalSavings.toFixed(2)}৳!` : "";
-
-        await tx.notification.create({
-          data: {
-            userId,
-            title: "Order Placed Successfully",
-            message: `Your order #${order.id} has been placed successfully. Total amount: ${totalAmount}${savingsMessage}৳`,
-            type: "order",
-          },
         });
 
         return order;
@@ -222,7 +204,6 @@ export class OrderController {
             },
           },
           payment: true,
-          shippingAddress: true,
         },
         skip,
         take: limit,
@@ -273,7 +254,6 @@ export class OrderController {
             },
           },
           payment: true,
-          shippingAddress: true,
         },
       });
 
@@ -355,15 +335,6 @@ export class OrderController {
           data: { status: "failed" },
         });
 
-        // Create notification
-        await tx.notification.create({
-          data: {
-            userId,
-            title: "Order Cancelled",
-            message: `Your order #${orderId} has been cancelled.`,
-            type: "order",
-          },
-        });
 
         return updatedOrder;
       });
@@ -435,7 +406,6 @@ export class OrderController {
             },
           },
           payment: true,
-          shippingAddress: true,
         },
         skip,
         take: limit,
@@ -491,7 +461,6 @@ export class OrderController {
             },
           },
           payment: true,
-          shippingAddress: true,
         },
       });
 
@@ -554,15 +523,6 @@ export class OrderController {
       });
       await invalidateOrderDataCaches();
 
-      // Create notification for user
-      await prisma.notification.create({
-        data: {
-          userId: order.userId,
-          title: `Order Status Updated`,
-          message: `Your order #${orderId} status has been updated to: ${status}`,
-          type: "order",
-        },
-      });
 
       res.status(200).json({
         success: true,
@@ -612,15 +572,6 @@ export class OrderController {
       });
       await invalidateOrderDataCaches();
 
-      // Create notification
-      await prisma.notification.create({
-        data: {
-          userId: order.userId,
-          title: "Payment Confirmed",
-          message: `Your payment for order #${orderId} has been confirmed.`,
-          type: "order",
-        },
-      });
 
       res.status(200).json({
         success: true,

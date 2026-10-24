@@ -47,46 +47,6 @@ router.post(
   UserController.changePassword,
 );
 
-// ==================== ADDRESS ROUTES ====================
-router.get(
-  "/addresses",
-  authenticateToken,
-  authorizeApproved,
-  cacheRoute(3600),
-  UserController.getAddresses,
-);
-router.post(
-  "/addresses",
-  authenticateToken,
-  authorizeApproved,
-  invalidateCache("cache:{userId}:/v1/users/addresses*"),
-  invalidateCache("cache:{userId}:/v1/users/profile*"),
-  UserController.addAddress,
-);
-router.put(
-  "/addresses/:addressId/default",
-  authenticateToken,
-  authorizeApproved,
-  invalidateCache("cache:{userId}:/v1/users/addresses*"),
-  invalidateCache("cache:{userId}:/v1/users/profile*"),
-  UserController.setDefaultAddress,
-); // must be before /:addressId
-router.put(
-  "/addresses/:addressId",
-  authenticateToken,
-  authorizeApproved,
-  invalidateCache("cache:{userId}:/v1/users/addresses*"),
-  invalidateCache("cache:{userId}:/v1/users/profile*"),
-  UserController.updateAddress,
-);
-router.delete(
-  "/addresses/:addressId",
-  authenticateToken,
-  authorizeApproved,
-  invalidateCache("cache:{userId}:/v1/users/addresses*"),
-  invalidateCache("cache:{userId}:/v1/users/profile*"),
-  UserController.deleteAddress,
-);
 
 // ==================== ADMIN ROUTES ====================
 router.get(
@@ -113,38 +73,7 @@ router.delete(
   authorizeAdmin,
   UserController.deleteProfile,
 );
-router.post(
-  "/notifications/send",
-  authenticateToken,
-  authorizeAdmin,
-  UserController.sendNotification,
-);
-router.post(
-  "/notifications/send-bulk",
-  authenticateToken,
-  authorizeAdmin,
-  UserController.sendBulkNotifications,
-);
 
-// ==================== NOTIFICATION ROUTES ====================
-router.get(
-  "/notifications",
-  authenticateToken,
-  authorizeApproved,
-  UserController.getNotifications,
-);
-router.put(
-  "/notifications/read-all",
-  authenticateToken,
-  authorizeApproved,
-  UserController.markAllNotificationsRead,
-);
-router.put(
-  "/notifications/:notificationId",
-  authenticateToken,
-  authorizeApproved,
-  UserController.markNotificationRead,
-);
 // ==================== CART ROUTES ====================
 // Cart data is now cached using internal Redis for sub-millisecond response times.
 router.get(

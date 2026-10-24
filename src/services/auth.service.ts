@@ -38,6 +38,22 @@ export class AuthService {
       throw new Error("User with this email or phone number already exists");
     }
 
+    if (divisionId && districtId && upazilaId) {
+      const validLocation = await prisma.upazila.findFirst({
+        where: {
+          id: upazilaId,
+          districtId,
+          district: { divisionId },
+        },
+        select: { id: true },
+      });
+      if (!validLocation) {
+        throw new Error(
+          "Selected division, district and upazila do not match",
+        );
+      }
+    }
+
     const hashedPassword = await this.hashPassword(password);
 
     const user = await prisma.user.create({

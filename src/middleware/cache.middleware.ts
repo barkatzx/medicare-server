@@ -93,7 +93,6 @@ export const cacheRoute = (
  */
 const DETERMINISTIC_KEYS: Record<string, string[]> = {
   "/v1/users/profile*": ["/v1/users/profile"],
-  "/v1/users/addresses*": ["/v1/users/addresses"],
   "/v1/users/cart*": ["/v1/users/cart", "/v1/users/cart/count"],
   "/v1/orders*": ["/v1/orders/my-orders"],
 };

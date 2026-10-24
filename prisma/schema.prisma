@@ -32,12 +32,6 @@ enum PaymentStatus {
   failed
 }
 
-enum NotificationType {
-  order
-  approval
-  system
-}
-
 enum DiscountType {
   percentage
   fixed
@@ -74,30 +68,27 @@ enum CareerApplicationStatus {
 }
 
 model User {
-  id               String    @id @default(uuid())
-  email            String    @unique
-  phone_number     String    @unique
-  name             String?
-  pharmacy_name    String?
-  role             Role      @default(customer)
-  password         String
-  isApproved       Boolean   @default(false)
-  defaultAddressId String?   @unique
-  fullAddress      String?
-  divisionId       String?
-  districtId       String?
-  upazilaId        String?
-  division         Division? @relation("UserDivision", fields: [divisionId], references: [id])
-  district         District? @relation("UserDistrict", fields: [districtId], references: [id])
-  upazila          Upazila?  @relation("UserUpazila", fields: [upazilaId], references: [id])
-  cart             Cart?
-  orders           Order[]
-  addresses        Address[]
-  notifications    Notification[]
-  careerJobs       CareerJob[] @relation("CareerJobCreator")
+  id                   String              @id @default(uuid())
+  email                String              @unique
+  phone_number         String              @unique
+  name                 String?
+  pharmacy_name        String?
+  role                 Role                @default(customer)
+  password             String
+  isApproved           Boolean             @default(false)
+  fullAddress          String?
+  divisionId           String?
+  districtId           String?
+  upazilaId            String?
+  division             Division?           @relation("UserDivision", fields: [divisionId], references: [id])
+  district             District?           @relation("UserDistrict", fields: [districtId], references: [id])
+  upazila              Upazila?            @relation("UserUpazila", fields: [upazilaId], references: [id])
+  cart                 Cart?
+  orders               Order[]
+  careerJobs           CareerJob[]         @relation("CareerJobCreator")
   reviewedApplications CareerApplication[] @relation("CareerApplicationReviewer")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   @@index([role])
   @@index([isApproved])
@@ -107,65 +98,48 @@ model User {
 }
 
 model Division {
-  id        String    @id @default(uuid())
-  code      String    @unique
-  name      String
-  bnName    String?
-  districts District[]
-  users     User[]    @relation("UserDivision")
+  id           String        @id @default(uuid())
+  code         String        @unique
+  name         String
+  bnName       String?
+  districts    District[]
+  users        User[]        @relation("UserDivision")
   distributors Distributor[] @relation("DistributorDivision")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
 model District {
-  id         String    @id @default(uuid())
-  code       String    @unique
-  name       String
-  bnName     String?
-  divisionId String
-  division   Division  @relation(fields: [divisionId], references: [id])
-  upazilas   Upazila[]
-  users      User[]    @relation("UserDistrict")
+  id           String        @id @default(uuid())
+  code         String        @unique
+  name         String
+  bnName       String?
+  divisionId   String
+  division     Division      @relation(fields: [divisionId], references: [id])
+  upazilas     Upazila[]
+  users        User[]        @relation("UserDistrict")
   distributors Distributor[] @relation("DistributorDistrict")
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  @@index([divisionId])
   @@unique([divisionId, name])
+  @@index([divisionId])
 }
 
 model Upazila {
-  id         String   @id @default(uuid())
-  code       String   @unique
-  name       String
-  bnName     String?
-  districtId String
-  district   District @relation(fields: [districtId], references: [id])
-  users      User[]   @relation("UserUpazila")
+  id           String        @id @default(uuid())
+  code         String        @unique
+  name         String
+  bnName       String?
+  districtId   String
+  district     District      @relation(fields: [districtId], references: [id])
+  users        User[]        @relation("UserUpazila")
   distributors Distributor[] @relation("DistributorUpazila")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  @@index([districtId])
   @@unique([districtId, name])
-}
-
-model Address {
-  id         String  @id @default(uuid())
-  userId     String
-  user       User    @relation(fields: [userId], references: [id])
-  street     String
-  city       String
-  state      String?
-  postalCode String?
-  country    String
-  isDefault  Boolean @default(false)
-  orders Order[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  @@index([userId])
-  @@index([isDefault])
+  @@index([districtId])
 }
 
 model Category {
@@ -173,8 +147,8 @@ model Category {
   name        String    @unique
   description String?
   products    Product[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Distributor {
@@ -197,25 +171,26 @@ model Distributor {
 }
 
 model Product {
-  id          String @id @default(uuid())
-  name        String
-  description String?
-  price       Decimal @db.Decimal(10, 2)
-  discountedPrice Decimal? @db.Decimal(10, 2)
-  discountPercent Int? @default(0)
-  stock       Int     @default(0)
-  distributorId String?
-  distributor Distributor? @relation(fields: [distributorId], references: [id], onDelete: Restrict)
-  tp          Decimal? @db.Decimal(10, 2)
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
-  images     ProductImage[]
-  cartItems  CartItem[]
-  orderItems OrderItem[]
-  featured   Boolean @default(false)
-  trending   Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String         @id @default(uuid())
+  name            String
+  description     String?
+  price           Decimal        @db.Decimal(10, 2)
+  discountedPrice Decimal?       @db.Decimal(10, 2)
+  discountPercent Int?           @default(0)
+  stock           Int            @default(0)
+  distributorId   String?
+  distributor     Distributor?   @relation(fields: [distributorId], references: [id], onDelete: Restrict)
+  tp              Decimal?       @db.Decimal(10, 2)
+  categoryId      String
+  category        Category       @relation(fields: [categoryId], references: [id])
+  images          ProductImage[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  featured        Boolean        @default(false)
+  trending        Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
   @@index([categoryId])
   @@index([distributorId])
   @@index([name])
@@ -227,99 +202,85 @@ model Product {
 }
 
 model ProductImage {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   url       String
   altText   String?
   productId String
-  product   Product @relation(fields: [productId], references: [id])
-  isDefault Boolean @default(false)
+  product   Product  @relation(fields: [productId], references: [id])
+  isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@index([productId])
 }
 
-
 model Cart {
-  id     String @id @default(uuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
-  items CartItem[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id])
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 model CartItem {
-  id        String @id @default(uuid())
+  id        String   @id @default(uuid())
   cartId    String
-  cart      Cart   @relation(fields: [cartId], references: [id])
+  cart      Cart     @relation(fields: [cartId], references: [id])
   productId String
-  product   Product @relation(fields: [productId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
   quantity  Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@unique([cartId, productId])
   @@index([cartId])
 }
 
 model Order {
-  id                String      @id @default(uuid())
-  userId            String
-  user              User        @relation(fields: [userId], references: [id])
-  shippingAddressId String
-  shippingAddress   Address     @relation(fields: [shippingAddressId], references: [id])
-  totalAmount       Decimal     @db.Decimal(10, 2)
-  status            OrderStatus @default(pending)
-  payment Payment?
-  items   OrderItem[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  totalAmount Decimal     @db.Decimal(10, 2)
+  status      OrderStatus @default(pending)
+  payment     Payment?
+  items       OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
   @@index([userId])
   @@index([status])
   @@index([createdAt])
-  @@index([userId, status])  
+  @@index([userId, status])
 }
 
 model OrderItem {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   orderId   String
-  order     Order   @relation(fields: [orderId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id])
   productId String
-  product   Product @relation(fields: [productId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
   quantity  Int
-  price     Decimal @db.Decimal(10, 2)
+  price     Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now())
+
   @@index([orderId])
   @@index([productId])
 }
 
 model Payment {
-  id      String        @id @default(uuid())
-  orderId String        @unique
-  order   Order         @relation(fields: [orderId], references: [id])
-  method  PaymentMethod @default(cod)
-  status  PaymentStatus @default(pending)
-  paidAt  DateTime?
-  createdAt DateTime @default(now())
-}
-
-model Notification {
-  id      String           @id @default(uuid())
-  userId  String
-  user    User             @relation(fields: [userId], references: [id])
-  title   String
-  message String
-  type    NotificationType
-  isRead  Boolean          @default(false)
-  createdAt DateTime @default(now())
-  @@index([userId])
-  @@index([isRead])
-  @@index([createdAt])
+  id        String        @id @default(uuid())
+  orderId   String        @unique
+  order     Order         @relation(fields: [orderId], references: [id])
+  method    PaymentMethod @default(cod)
+  status    PaymentStatus @default(pending)
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
 }
 
 model CareerJob {
-  id                  String              @id @default(uuid()) @db.Uuid
+  id                  String               @id @default(uuid()) @db.Uuid
   title               String
-  slug                String              @unique
+  slug                String               @unique
   department          String
   employmentType      CareerEmploymentType
   workplaceType       CareerWorkplaceType
@@ -329,17 +290,17 @@ model CareerJob {
   responsibilities    String?
   requirements        String?
   qualifications      String?
-  salaryMin           Decimal?            @db.Decimal(12, 2)
-  salaryMax           Decimal?            @db.Decimal(12, 2)
+  salaryMin           Decimal?             @db.Decimal(12, 2)
+  salaryMax           Decimal?             @db.Decimal(12, 2)
   salaryCurrency      String?
-  applicationDeadline DateTime?           @db.Timestamptz(3)
-  status              CareerJobStatus     @default(DRAFT)
-  publishedAt         DateTime?           @db.Timestamptz(3)
-  createdById         String?             @db.Uuid
-  createdBy           User?               @relation("CareerJobCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  applicationDeadline DateTime?            @db.Timestamptz(3)
+  status              CareerJobStatus      @default(DRAFT)
+  publishedAt         DateTime?            @db.Timestamptz(3)
+  createdById         String?              @db.Uuid
+  createdBy           User?                @relation("CareerJobCreator", fields: [createdById], references: [id], onDelete: SetNull)
   applications        CareerApplication[]
-  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime            @updatedAt @db.Timestamptz(3)
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
 
   @@index([status, publishedAt])
   @@index([department])
@@ -348,9 +309,9 @@ model CareerJob {
 }
 
 model CareerApplication {
-  id                 String                   @id @default(uuid()) @db.Uuid
-  jobId              String                   @db.Uuid
-  job                CareerJob                @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  id                 String                  @id @default(uuid()) @db.Uuid
+  jobId              String                  @db.Uuid
+  job                CareerJob               @relation(fields: [jobId], references: [id], onDelete: Restrict)
   fullName           String
   email              String
   phone              String
@@ -367,11 +328,11 @@ model CareerApplication {
   resumeSizeBytes    Int
   status             CareerApplicationStatus @default(NEW)
   adminNotes         String?
-  reviewedById       String?                  @db.Uuid
-  reviewedBy         User?                    @relation("CareerApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  reviewedAt         DateTime?                @db.Timestamptz(3)
-  createdAt          DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime                 @updatedAt @db.Timestamptz(3)
+  reviewedById       String?                 @db.Uuid
+  reviewedBy         User?                   @relation("CareerApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt         DateTime?               @db.Timestamptz(3)
+  createdAt          DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @db.Timestamptz(3)
 
   @@index([jobId, createdAt])
   @@index([status, createdAt])
