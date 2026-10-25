@@ -18,29 +18,49 @@ export class OrderController {
   static async createOrder(req: AuthRequest, res: Response) {
     try {
       const userId = req.user!.id;
-      const { shippingAddressId, paymentMethod = "cod" } =
-        req.body as CreateOrderBody;
+      const { paymentMethod = "cod" } = req.body as CreateOrderBody;
+      let shippingAddressId = req.body.shippingAddressId as string | undefined;
 
-      if (!shippingAddressId) {
-        return res.status(400).json({
-          success: false,
-          error: "Shipping address is required",
-        });
-      }
-
-      // Verify address belongs to user
-      const address = await prisma.address.findFirst({
-        where: {
-          id: shippingAddressId,
-          userId,
-        },
-      });
+      // v1 apps send shippingAddressId; v2 apps use location 2.0 (user profile)
+      let address = shippingAddressId
+        ? await prisma.address.findFirst({
+            where: { id: shippingAddressId, userId },
+          })
+        : null;
 
       if (!address) {
-        return res.status(404).json({
-          success: false,
-          error: "Shipping address not found",
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          include: { division: true, district: true, upazila: true },
         });
+
+        const street = (req.body.fullAddress ?? user?.fullAddress ?? "")
+          .toString()
+          .trim();
+
+        if (!street) {
+          return res.status(400).json({
+            success: false,
+            error: shippingAddressId
+              ? "Shipping address not found"
+              : "Shipping address is required",
+          });
+        }
+
+        const city = user?.upazila?.name ?? user?.district?.name ?? "N/A";
+        const state =
+          [user?.district?.name, user?.division?.name]
+            .filter(Boolean)
+            .join(", ") || null;
+
+        address =
+          (await prisma.address.findFirst({
+            where: { userId, street, city, state, country: "" },
+          })) ??
+          (await prisma.address.create({
+            data: { userId, street, city, state, country: "" },
+          }));
+        shippingAddressId = address.id;
       }
 
       // Get user's cart with items
@@ -64,11 +84,13 @@ export class OrderController {
       // Check stock availability and calculate totals with discounts
       let totalAmount = 0;
       let totalOriginalAmount = 0;
-      
+
       // Pre-calculate items data and verify stock
       const orderItemsData = cart.items.map((item) => {
         if (item.quantity > item.product.stock) {
-          throw new Error(`Insufficient stock for product: ${item.product.name}. Available: ${item.product.stock}`);
+          throw new Error(
+            `Insufficient stock for product: ${item.product.name}. Available: ${item.product.stock}`,
+          );
         }
 
         const originalPrice = Number(item.product.price);
@@ -82,7 +104,7 @@ export class OrderController {
 
         const itemTotal = finalPrice * item.quantity;
         const itemOriginalTotal = originalPrice * item.quantity;
-        
+
         totalAmount += itemTotal;
         totalOriginalAmount += itemOriginalTotal;
 
@@ -98,78 +120,81 @@ export class OrderController {
       totalOriginalAmount = Math.round(totalOriginalAmount * 100) / 100;
 
       // Create order with transaction with significantly increased timeout for massive orders (up to 500+ items)
-      const result = await prisma.$transaction(async (tx) => {
-        // Create order with all items in one nested operation
-        const order = await tx.order.create({
-          data: {
-            userId,
-            shippingAddressId,
-            totalAmount,
-            status: "pending",
-            items: {
-              create: orderItemsData,
-            },
-            payment: {
-              create: {
-                method: paymentMethod,
-                status: "pending",
+      const result = await prisma.$transaction(
+        async (tx) => {
+          // Create order with all items in one nested operation
+          const order = await tx.order.create({
+            data: {
+              userId,
+              shippingAddressId: address.id,
+              totalAmount,
+              status: "pending",
+              items: {
+                create: orderItemsData,
               },
-            },
-          },
-          include: {
-            items: {
-              include: {
-                product: true,
-              },
-            },
-            payment: true,
-            shippingAddress: true,
-          },
-        });
-
-        // Update product stock in batches to avoid connection pool exhaustion
-        // and handle large orders (100-500+ products) efficiently
-        // Using a balanced batch size for optimal performance and stability
-        const batchSize = 50;
-        for (let i = 0; i < cart.items.length; i += batchSize) {
-          const batch = cart.items.slice(i, i + batchSize);
-          await Promise.all(
-            batch.map((item) =>
-              tx.product.update({
-                where: { id: item.productId },
-                data: {
-                  stock: {
-                    decrement: item.quantity,
-                  },
+              payment: {
+                create: {
+                  method: paymentMethod,
+                  status: "pending",
                 },
-              })
-            )
-          );
-        }
+              },
+            },
+            include: {
+              items: {
+                include: {
+                  product: true,
+                },
+              },
+              payment: true,
+              shippingAddress: true,
+            },
+          });
 
-        // Clear cart
-        await tx.cartItem.deleteMany({
-          where: { cartId: cart.id },
-        });
+          // Update product stock in batches to avoid connection pool exhaustion
+          // and handle large orders (100-500+ products) efficiently
+          // Using a balanced batch size for optimal performance and stability
+          const batchSize = 50;
+          for (let i = 0; i < cart.items.length; i += batchSize) {
+            const batch = cart.items.slice(i, i + batchSize);
+            await Promise.all(
+              batch.map((item) =>
+                tx.product.update({
+                  where: { id: item.productId },
+                  data: {
+                    stock: {
+                      decrement: item.quantity,
+                    },
+                  },
+                }),
+              ),
+            );
+          }
 
-        // Create notification with savings info
-        const totalSavings = totalOriginalAmount - totalAmount;
-        const savingsMessage =
-          totalSavings > 0 ? ` You saved ${totalSavings.toFixed(2)}৳!` : "";
+          // Clear cart
+          await tx.cartItem.deleteMany({
+            where: { cartId: cart.id },
+          });
 
-        await tx.notification.create({
-          data: {
-            userId,
-            title: "Order Placed Successfully",
-            message: `Your order #${order.id} has been placed successfully. Total amount: ${totalAmount}${savingsMessage}৳`,
-            type: "order",
-          },
-        });
+          // Create notification with savings info
+          const totalSavings = totalOriginalAmount - totalAmount;
+          const savingsMessage =
+            totalSavings > 0 ? ` You saved ${totalSavings.toFixed(2)}৳!` : "";
 
-        return order;
-      }, {
-        timeout: 300000 // 300 seconds (5 minutes) timeout to handle massive orders (100-500+ products)
-      });
+          await tx.notification.create({
+            data: {
+              userId,
+              title: "Order Placed Successfully",
+              message: `Your order #${order.id} has been placed successfully. Total amount: ${totalAmount}${savingsMessage}৳`,
+              type: "order",
+            },
+          });
+
+          return order;
+        },
+        {
+          timeout: 300000, // 300 seconds (5 minutes) timeout to handle massive orders (100-500+ products)
+        },
+      );
 
       await invalidateOrderDataCaches();
 
@@ -180,7 +205,7 @@ export class OrderController {
       });
     } catch (error: any) {
       console.error("Create order error details:", error);
-      
+
       // Handle specific stock error thrown above
       if (error.message && error.message.startsWith("Insufficient stock")) {
         return res.status(400).json({
@@ -191,8 +216,10 @@ export class OrderController {
 
       res.status(500).json({
         success: false,
-        error: "Failed to create order due to heavy processing load. We are processing a large number of items. Please check 'My Orders' in a moment or try again.",
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        error:
+          "Failed to create order due to heavy processing load. We are processing a large number of items. Please check 'My Orders' in a moment or try again.",
+        details:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -339,8 +366,8 @@ export class OrderController {
                   increment: item.quantity,
                 },
               },
-            })
-          )
+            }),
+          ),
         );
 
         // Update order status

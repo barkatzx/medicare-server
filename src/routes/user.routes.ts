@@ -47,6 +47,46 @@ router.post(
   UserController.changePassword,
 );
 
+// ==================== ADDRESS ROUTES ====================
+router.get(
+  "/addresses",
+  authenticateToken,
+  authorizeApproved,
+  cacheRoute(3600),
+  UserController.getAddresses,
+);
+router.post(
+  "/addresses",
+  authenticateToken,
+  authorizeApproved,
+  invalidateCache("cache:{userId}:/v1/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
+  UserController.addAddress,
+);
+router.put(
+  "/addresses/:addressId/default",
+  authenticateToken,
+  authorizeApproved,
+  invalidateCache("cache:{userId}:/v1/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
+  UserController.setDefaultAddress,
+); // must be before /:addressId
+router.put(
+  "/addresses/:addressId",
+  authenticateToken,
+  authorizeApproved,
+  invalidateCache("cache:{userId}:/v1/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
+  UserController.updateAddress,
+);
+router.delete(
+  "/addresses/:addressId",
+  authenticateToken,
+  authorizeApproved,
+  invalidateCache("cache:{userId}:/v1/users/addresses*"),
+  invalidateCache("cache:{userId}:/v1/users/profile*"),
+  UserController.deleteAddress,
+);
 
 // ==================== ADMIN ROUTES ====================
 router.get(

@@ -4,6 +4,14 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { AuthService } from "../services/auth.service";
 import { invalidateOrderDataCaches } from "../services/cache.service";
 import redisClient from "../config/redis";
+interface AddressInput {
+  street: string;
+  city: string;
+  state?: string;
+  postalCode?: string;
+  country: string;
+  isDefault?: boolean;
+}
 
 const VALID_ROLES = ["admin", "customer", "TSR"] as const;
 type ValidRole = (typeof VALID_ROLES)[number];
@@ -102,6 +110,7 @@ export class UserController {
           role: true,
           isApproved: true,
           createdAt: true,
+          defaultAddressId: true,
           fullAddress: true,
           divisionId: true,
           districtId: true,
@@ -129,6 +138,14 @@ export class UserController {
               name: true,
               bnName: true,
             },
+          },
+          addresses: {
+            orderBy: { createdAt: "desc" },
+          },
+          notifications: {
+            where: { isRead: false },
+            orderBy: { createdAt: "desc" },
+            take: 10,
           },
         },
       });
@@ -518,6 +535,16 @@ export class UserController {
           },
         });
 
+        await tx.notification.create({
+          data: {
+            userId,
+            title: "Account Approved",
+            message:
+              "Your account has been approved. You can now log in and start shopping.",
+            type: "approval",
+          },
+        });
+
         return user;
       });
 
@@ -531,6 +558,309 @@ export class UserController {
         .json({ error: error.message || "Failed to approve user" });
     }
   }
+
+  // Get user's addresses
+  static async getAddresses(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const addresses = await prisma.address.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+      });
+
+      res.status(200).json({
+        message: "Addresses fetched successfully",
+        data: addresses,
+      });
+    } catch (error: any) {
+      console.error("Get addresses error:", error);
+      res
+        .status(500)
+        .json({ error: error.message || "Failed to fetch addresses" });
+    }
+  }
+
+  // Add new address
+  static async addAddress(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const addressData: AddressInput = req.body;
+
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      if (!addressData.street || !addressData.city || !addressData.country) {
+        return res.status(400).json({
+          error: "Street, city, and country are required",
+        });
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const existingCount = await tx.address.count({ where: { userId } });
+        const isFirstAddress = existingCount === 0;
+        const shouldBeDefault = addressData.isDefault || isFirstAddress;
+
+        if (shouldBeDefault) {
+          await tx.address.updateMany({
+            where: { userId },
+            data: { isDefault: false },
+          });
+        }
+
+        const address = await tx.address.create({
+          data: {
+            userId,
+            street: addressData.street,
+            city: addressData.city,
+            state: addressData.state,
+            postalCode: addressData.postalCode,
+            country: addressData.country,
+            isDefault: shouldBeDefault,
+          },
+        });
+
+        if (shouldBeDefault) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { defaultAddressId: address.id },
+          });
+        }
+
+        return address;
+      });
+
+      res
+        .status(201)
+        .json({ message: "Address added successfully", data: result });
+    } catch (error: any) {
+      console.error("Add address error:", error);
+      res.status(400).json({ error: error.message || "Failed to add address" });
+    }
+  }
+
+  // Update address
+  static async updateAddress(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { addressId } = req.params;
+      const addressData: Partial<AddressInput> = req.body;
+
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const existingAddress = await prisma.address.findFirst({
+        where: { id: addressId, userId },
+      });
+
+      if (!existingAddress) {
+        return res.status(404).json({ error: "Address not found" });
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        if (addressData.isDefault) {
+          await tx.address.updateMany({
+            where: { userId, NOT: { id: addressId } },
+            data: { isDefault: false },
+          });
+        }
+
+        const updateData: Record<string, any> = {};
+        if (addressData.street !== undefined)
+          updateData.street = addressData.street;
+        if (addressData.city !== undefined) updateData.city = addressData.city;
+        if (addressData.state !== undefined)
+          updateData.state = addressData.state;
+        if (addressData.postalCode !== undefined)
+          updateData.postalCode = addressData.postalCode;
+        if (addressData.country !== undefined)
+          updateData.country = addressData.country;
+        if (addressData.isDefault !== undefined)
+          updateData.isDefault = addressData.isDefault;
+
+        const address = await tx.address.update({
+          where: { id: addressId },
+          data: updateData,
+        });
+
+        if (addressData.isDefault === true) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { defaultAddressId: address.id },
+          });
+        } else if (
+          existingAddress.isDefault &&
+          addressData.isDefault === false
+        ) {
+          const anotherAddress = await tx.address.findFirst({
+            where: { userId, NOT: { id: addressId } },
+            orderBy: { createdAt: "asc" },
+          });
+
+          if (anotherAddress) {
+            await tx.address.update({
+              where: { id: anotherAddress.id },
+              data: { isDefault: true },
+            });
+            await tx.user.update({
+              where: { id: userId },
+              data: { defaultAddressId: anotherAddress.id },
+            });
+          } else {
+            await tx.user.update({
+              where: { id: userId },
+              data: { defaultAddressId: null },
+            });
+          }
+        }
+
+        return address;
+      });
+
+      res
+        .status(200)
+        .json({ message: "Address updated successfully", data: result });
+    } catch (error: any) {
+      console.error("Update address error:", error);
+      res
+        .status(400)
+        .json({ error: error.message || "Failed to update address" });
+    }
+  }
+
+  // Delete address
+  static async deleteAddress(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { addressId } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const address = await prisma.address.findFirst({
+        where: { id: addressId, userId },
+      });
+
+      if (!address) {
+        return res.status(404).json({ error: "Address not found" });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        const ordersUsingAddress = await tx.order.count({
+          where: { shippingAddressId: addressId },
+        });
+
+        if (ordersUsingAddress > 0) {
+          throw new Error("Cannot delete address that is used in orders");
+        }
+
+        // If this is the default address, we need to handle User.defaultAddressId first
+        // to avoid foreign key constraint violation
+        if (address.isDefault) {
+          const anotherAddress = await tx.address.findFirst({
+            where: { userId, NOT: { id: addressId } },
+            orderBy: { createdAt: "asc" },
+          });
+
+          if (anotherAddress) {
+            await tx.address.update({
+              where: { id: anotherAddress.id },
+              data: { isDefault: true },
+            });
+            await tx.user.update({
+              where: { id: userId },
+              data: { defaultAddressId: anotherAddress.id },
+            });
+          } else {
+            await tx.user.update({
+              where: { id: userId },
+              data: { defaultAddressId: null },
+            });
+          }
+        } else {
+          // Double check User.defaultAddressId even if address.isDefault is false
+          const user = await tx.user.findUnique({
+            where: { id: userId },
+            select: { defaultAddressId: true },
+          });
+
+          if (user?.defaultAddressId === addressId) {
+            await tx.user.update({
+              where: { id: userId },
+              data: { defaultAddressId: null },
+            });
+          }
+        }
+
+        await tx.address.delete({ where: { id: addressId } });
+      });
+
+      res.status(200).json({ message: "Address deleted successfully" });
+    } catch (error: any) {
+      console.error("Delete address error:", error);
+      const status = error.message?.includes("Cannot delete") ? 400 : 500;
+      res
+        .status(status)
+        .json({ error: error.message || "Failed to delete address" });
+    }
+  }
+
+  // Set default address
+  static async setDefaultAddress(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { addressId } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const address = await prisma.address.findFirst({
+        where: { id: addressId, userId },
+      });
+
+      if (!address) {
+        return res.status(404).json({ error: "Address not found" });
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        await tx.address.updateMany({
+          where: { userId },
+          data: { isDefault: false },
+        });
+
+        const updatedAddress = await tx.address.update({
+          where: { id: addressId },
+          data: { isDefault: true },
+        });
+
+        await tx.user.update({
+          where: { id: userId },
+          data: { defaultAddressId: addressId },
+        });
+
+        return updatedAddress;
+      });
+
+      res.status(200).json({
+        message: "Default address set successfully",
+        data: result,
+      });
+    } catch (error: any) {
+      console.error("Set default address error:", error);
+      res
+        .status(400)
+        .json({ error: error.message || "Failed to set default address" });
+    }
+  }
+
 
   // Logout user (blacklist token)
   static async logout(req: AuthRequest, res: Response) {
