@@ -62,7 +62,6 @@ export class OrderController {
           }));
         shippingAddressId = address.id;
       }
-
       // Get user's cart with items
       const cart = await prisma.cart.findUnique({
         where: { userId },
