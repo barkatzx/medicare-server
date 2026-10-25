@@ -12,12 +12,12 @@ import { validateProductFields } from "../validators/product.validator";
 const router = Router();
 
 // ==================== PUBLIC ROUTES ====================
-router.get("/", cacheRoute(300), ProductController.getAllProducts);
+router.get("/", cacheRoute(300, undefined, ["products"]), ProductController.getAllProducts);
 router.get("/trending", ProductController.getTrendingProducts);
 router.get("/featured", ProductController.getFeaturedProducts);
 router.get("/new", ProductController.getNewProducts);
-router.get("/search", cacheRoute(60), ProductController.searchProducts); // Shorter cache for search
-router.get("/:id", cacheRoute(300), ProductController.getProductById);
+router.get("/search", cacheRoute(60, undefined, ["products"]), ProductController.searchProducts); // Shorter cache for search
+router.get("/:id", cacheRoute(300, undefined, ["products"]), ProductController.getProductById);
 
 // ==================== PROTECTED ROUTES ====================
 router.get(

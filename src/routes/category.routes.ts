@@ -11,9 +11,9 @@ import { cacheRoute, invalidateCache } from "../middleware/cache.middleware";
 const router = Router();
 
 // ==================== PUBLIC ROUTES ====================
-router.get("/", cacheRoute(600), CategoryController.getAllCategories);
-router.get("/:id", cacheRoute(600), CategoryController.getCategoryById);
-router.get("/:id/products", cacheRoute(300), CategoryController.getCategoryProducts);
+router.get("/", cacheRoute(600, undefined, ["products"]), CategoryController.getAllCategories);
+router.get("/:id", cacheRoute(600, undefined, ["products"]), CategoryController.getCategoryById);
+router.get("/:id/products", cacheRoute(300, undefined, ["products"]), CategoryController.getCategoryProducts);
 
 // ==================== ADMIN ROUTES ====================
 router.post(

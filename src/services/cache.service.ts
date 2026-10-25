@@ -30,7 +30,25 @@ export const invalidateCacheTags = async (...tags: string[]): Promise<void> => {
   }
 };
 
+export const invalidateProductDataCaches = async (): Promise<void> => {
+  await invalidateCacheTags("products");
+  try {
+    const keys = (
+      await Promise.all(
+        ["products:new*", "products:trending*", "products:featured*"].map(
+          (pattern) => redisClient.keys(pattern),
+        ),
+      )
+    ).flat();
+    if (keys.length > 0) await redisClient.del(...keys);
+  } catch (error) {
+    console.error("[Cache] Product cache invalidation error:", error);
+  }
+};
+
+// Orders change product stock, so product caches must be cleared too.
 export const invalidateOrderDataCaches = async (): Promise<void> => {
+  await invalidateProductDataCaches();
   await invalidateCacheTags(
     "orders",
     "tsr-sales",

@@ -1,5 +1,6 @@
 import { prisma } from "../config/supabase";
 import redisClient from "../config/redis";
+import { invalidateProductDataCaches } from "./cache.service";
 import { DiscountService } from "./discount.service";
 
 export class ProductService {
@@ -44,16 +45,7 @@ export class ProductService {
    * Invalidates product-related caches
    */
   static async invalidateProductCaches() {
-    const [trendingKeys, featuredKeys] = await Promise.all([
-      redisClient.keys("products:trending*"),
-      redisClient.keys("products:featured*"),
-    ]);
-
-    await redisClient.del(
-      "products:new",
-      ...trendingKeys,
-      ...featuredKeys,
-    );
+    await invalidateProductDataCaches();
   }
 
   /**
