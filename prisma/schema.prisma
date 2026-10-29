@@ -176,6 +176,7 @@ model Notification {
   title   String
   message String
   type    NotificationType
+  photo   String?
   isRead  Boolean          @default(false)
   createdAt DateTime @default(now())
 

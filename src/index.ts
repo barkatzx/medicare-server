@@ -12,6 +12,7 @@ import productRoutes from "./routes/product.routes";
 import salesRoutes from "./routes/sales.routes"; // Import sales routes
 import userRoutes from "./routes/user.routes";
 import tsrRoutes from "./tsr/tsr.routes";
+import notificationRoutes from "./notifications/notifications.routes";
 import careerRoutes from "./career/career.routes";
 // import { cacheMiddleware } from "./middleware/cache.middleware"; // Removed global cache
 
@@ -42,6 +43,7 @@ app.use("/v1/tsr", tsrRoutes);
 app.use("/admin/tsr-sales", adminTsrSalesRoutes);
 app.use("/v1/admin/tsr-sales", adminTsrSalesRoutes);
 app.use("/v1/sales", salesRoutes);
+app.use("/v1/notifications", notificationRoutes);
 app.use("/api/career", careerRoutes);
 
 // Health check
