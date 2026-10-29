@@ -4,6 +4,7 @@ import { prisma } from "../config/supabase";
 import { DiscountService } from "../services/discount.service";
 import { invalidateOrderDataCaches } from "../services/cache.service";
 import { AuthRequest } from "../types";
+import { NotificationService } from "../notifications/notifications.service";
 
 interface CreateOrderBody {
   shippingAddressId: string;
@@ -179,27 +180,37 @@ export class OrderController {
           const savingsMessage =
             totalSavings > 0 ? ` You saved ${totalSavings.toFixed(2)}৳!` : "";
 
-          await tx.notification.create({
+          const notification = await tx.notification.create({
             data: {
               userId,
               title: "Order Placed Successfully",
               message: `Your order #${order.id} has been placed successfully. Total amount: ${totalAmount}${savingsMessage}৳`,
               type: "order",
             },
+            select: {
+              id: true,
+              userId: true,
+              title: true,
+              message: true,
+              type: true,
+              photo: true,
+            },
           });
 
-          return order;
+          return { order, notification };
         },
         {
           timeout: 300000, // 300 seconds (5 minutes) timeout to handle massive orders (100-500+ products)
         },
       );
 
+      await NotificationService.pushSavedNotification(result.notification);
+
       await invalidateOrderDataCaches();
 
       return res.status(201).json({
         success: true,
-        data: result,
+        data: result.order,
         message: "Order created successfully",
       });
     } catch (error: any) {
@@ -382,23 +393,33 @@ export class OrderController {
         });
 
         // Create notification
-        await tx.notification.create({
+        const notification = await tx.notification.create({
           data: {
             userId,
             title: "Order Cancelled",
             message: `Your order #${orderId} has been cancelled.`,
             type: "order",
           },
+          select: {
+            id: true,
+            userId: true,
+            title: true,
+            message: true,
+            type: true,
+            photo: true,
+          },
         });
 
-        return updatedOrder;
+        return { order: updatedOrder, notification };
       });
+
+      await NotificationService.pushSavedNotification(result.notification);
 
       await invalidateOrderDataCaches();
 
       res.status(200).json({
         success: true,
-        data: result,
+        data: result.order,
         message: "Order cancelled successfully",
       });
     } catch (error) {
@@ -581,14 +602,23 @@ export class OrderController {
       await invalidateOrderDataCaches();
 
       // Create notification for user
-      await prisma.notification.create({
+      const notification = await prisma.notification.create({
         data: {
           userId: order.userId,
           title: `Order Status Updated`,
           message: `Your order #${orderId} status has been updated to: ${status}`,
           type: "order",
         },
+        select: {
+          id: true,
+          userId: true,
+          title: true,
+          message: true,
+          type: true,
+          photo: true,
+        },
       });
+      await NotificationService.pushSavedNotification(notification);
 
       res.status(200).json({
         success: true,
@@ -639,14 +669,23 @@ export class OrderController {
       await invalidateOrderDataCaches();
 
       // Create notification
-      await prisma.notification.create({
+      const notification = await prisma.notification.create({
         data: {
           userId: order.userId,
           title: "Payment Confirmed",
           message: `Your payment for order #${orderId} has been confirmed.`,
           type: "order",
         },
+        select: {
+          id: true,
+          userId: true,
+          title: true,
+          message: true,
+          type: true,
+          photo: true,
+        },
       });
+      await NotificationService.pushSavedNotification(notification);
 
       res.status(200).json({
         success: true,

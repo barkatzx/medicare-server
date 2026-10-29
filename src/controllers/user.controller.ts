@@ -4,6 +4,7 @@ import { AuthRequest } from "../middleware/auth.middleware";
 import { AuthService } from "../services/auth.service";
 import { invalidateOrderDataCaches } from "../services/cache.service";
 import redisClient from "../config/redis";
+import { NotificationService } from "../notifications/notifications.service";
 interface AddressInput {
   street: string;
   city: string;
@@ -535,7 +536,7 @@ export class UserController {
           },
         });
 
-        await tx.notification.create({
+        const notification = await tx.notification.create({
           data: {
             userId,
             title: "Account Approved",
@@ -543,14 +544,24 @@ export class UserController {
               "Your account has been approved. You can now log in and start shopping.",
             type: "approval",
           },
+          select: {
+            id: true,
+            userId: true,
+            title: true,
+            message: true,
+            type: true,
+            photo: true,
+          },
         });
 
-        return user;
+        return { user, notification };
       });
+
+      await NotificationService.pushSavedNotification(result.notification);
 
       res
         .status(200)
-        .json({ message: "User approved successfully", data: result });
+        .json({ message: "User approved successfully", data: result.user });
     } catch (error: any) {
       console.error("Approve user error:", error);
       res

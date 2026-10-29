@@ -29,6 +29,14 @@ const publicFields = {
 } as const;
 
 type SendInput = { title: string; message: string; type: NotificationType };
+export type SavedNotificationForPush = {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  photo: string | null;
+};
 
 export class NotificationService {
   static async registerDeviceToken(
@@ -47,6 +55,21 @@ export class NotificationService {
   static async unregisterDeviceToken(userId: string, token: string) {
     const result = await prisma.deviceToken.deleteMany({ where: { userId, token } });
     return result.count;
+  }
+
+  // Deliver an already-persisted notification; this never creates another record.
+  static async pushSavedNotification(
+    notification: SavedNotificationForPush,
+  ): Promise<PushOutcome> {
+    return safelyDeliver(() =>
+      PushService.deliver(notification.userId, {
+        title: notification.title,
+        message: notification.message,
+        notificationId: notification.id,
+        type: notification.type,
+        photo: notification.photo,
+      }),
+    );
   }
 
   // ---------- Storage ----------
@@ -156,15 +179,7 @@ export class NotificationService {
       if (photo) await this.deletePhoto(photo);
       throw error;
     }
-    const push = await safelyDeliver(async () =>
-      PushService.deliver(userId, {
-        title: notification.title,
-        message: notification.message,
-        notificationId: notification.id,
-        type: notification.type,
-        photo: notification.photo,
-      }),
-    );
+    const push = await this.pushSavedNotification({ ...notification, userId });
     return { status: "ok" as const, notification, push };
   }
 

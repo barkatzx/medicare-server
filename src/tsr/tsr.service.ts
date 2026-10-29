@@ -1,6 +1,7 @@
 import { OrderStatus, Prisma } from "@prisma/client";
 import { prisma } from "../config/supabase";
 import { invalidateOrderDataCaches } from "../services/cache.service";
+import { NotificationService } from "../notifications/notifications.service";
 import {
   ORDER_STATUS_FILTERS,
   isValidOrderStatusFilter,
@@ -365,14 +366,23 @@ export class TsrService {
     });
     await invalidateOrderDataCaches();
 
-    await prisma.notification.create({
+    const notification = await prisma.notification.create({
       data: {
         userId: order.userId,
         title: "Order Status Updated",
         message: `Your order #${orderId} status has been updated to: ${status}`,
         type: "order",
       },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        message: true,
+        type: true,
+        photo: true,
+      },
     });
+    await NotificationService.pushSavedNotification(notification);
 
     return {
       success: true,
