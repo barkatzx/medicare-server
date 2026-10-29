@@ -74,7 +74,7 @@ enum CareerApplicationStatus {
 }
 
 model User {
-  id                   String              @id @default(uuid())
+  id                   String              @id @default(uuid()) @db.Uuid
   email                String              @unique
   phone_number         String              @unique
   name                 String?
@@ -94,6 +94,7 @@ model User {
   orders               Order[]
   addresses            Address[]
   notifications        Notification[]
+  deviceTokens         DeviceToken[]
   careerJobs           CareerJob[]         @relation("CareerJobCreator")
   reviewedApplications CareerApplication[] @relation("CareerApplicationReviewer")
   createdAt            DateTime            @default(now())
@@ -153,7 +154,7 @@ model Upazila {
 
 model Address {
   id         String  @id @default(uuid())
-  userId     String
+  userId     String  @db.Uuid
   user       User    @relation(fields: [userId], references: [id])
   street     String
   city       String
@@ -171,7 +172,7 @@ model Address {
 
 model Notification {
   id      String           @id @default(uuid())
-  userId  String
+  userId  String           @db.Uuid
   user    User             @relation(fields: [userId], references: [id])
   title   String
   message String
@@ -183,6 +184,25 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
+}
+
+enum DevicePlatform {
+  android
+  ios
+  web
+}
+
+model DeviceToken {
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String         @db.Uuid
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String         @unique
+  platform   DevicePlatform
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([userId, isActive])
 }
 
 model Category {
@@ -258,7 +278,7 @@ model ProductImage {
 
 model Cart {
   id        String     @id @default(uuid())
-  userId    String     @unique
+  userId    String     @unique @db.Uuid
   user      User       @relation(fields: [userId], references: [id])
   items     CartItem[]
   createdAt DateTime   @default(now())
@@ -281,7 +301,7 @@ model CartItem {
 
 model Order {
   id          String      @id @default(uuid())
-  userId      String
+  userId      String      @db.Uuid
   user        User        @relation(fields: [userId], references: [id])
   shippingAddressId String
   shippingAddress   Address @relation(fields: [shippingAddressId], references: [id])

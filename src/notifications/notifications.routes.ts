@@ -11,6 +11,9 @@ const photoUpload = handleMulterError(upload.single("photo"));
 
 router.use(authenticateToken);
 
+router.post("/device-token", NotificationController.registerDeviceToken);
+router.delete("/device-token", NotificationController.unregisterDeviceToken);
+
 // ==================== ADMIN ROUTES ====================
 router.post(
   "/user/:userId",

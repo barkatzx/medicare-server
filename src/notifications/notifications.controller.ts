@@ -5,9 +5,46 @@ import {
   isUuid,
   parsePagination,
   validateSendBody,
+  validateDeviceTokenBody,
+  validateDeviceTokenDeleteBody,
 } from "./notifications.validation";
 
 export class NotificationController {
+  static async registerDeviceToken(req: AuthRequest, res: Response) {
+    const { error, data } = validateDeviceTokenBody(req.body);
+    if (error || !data) return res.status(400).json({ error });
+    try {
+      const deviceToken = await NotificationService.registerDeviceToken(
+        req.user!.id,
+        data.token,
+        data.platform,
+      );
+      return res.json({ success: true, data: { id: deviceToken.id } });
+    } catch (err) {
+      console.error("Device token registration failed", {
+        code: (err as { code?: string })?.code ?? "unknown",
+      });
+      return res.status(500).json({ error: "Failed to register device token" });
+    }
+  }
+
+  static async unregisterDeviceToken(req: AuthRequest, res: Response) {
+    const { error, data } = validateDeviceTokenDeleteBody(req.body);
+    if (error || !data) return res.status(400).json({ error });
+    try {
+      const deleted = await NotificationService.unregisterDeviceToken(
+        req.user!.id,
+        data.token,
+      );
+      return res.json({ success: true, data: { removed: deleted > 0 } });
+    } catch (err) {
+      console.error("Device token removal failed", {
+        code: (err as { code?: string })?.code ?? "unknown",
+      });
+      return res.status(500).json({ error: "Failed to unregister device token" });
+    }
+  }
+
   static async getMyNotifications(req: AuthRequest, res: Response) {
     try {
       const { page, limit } = parsePagination(req.query);
@@ -88,8 +125,13 @@ export class NotificationController {
       }
       res.status(201).json({
         success: true,
-        message: "Notification sent successfully",
-        data: { recipients: 1, notification: result.notification },
+        message: "Notification saved",
+        data: {
+          savedCount: 1,
+          recipients: 1,
+          notification: result.notification,
+          push: result.push,
+        },
       });
     } catch (error) {
       console.error("Send notification error:", error);
@@ -105,9 +147,11 @@ export class NotificationController {
       const result = await NotificationService.sendToAll(data, req.file);
       res.status(201).json({
         success: true,
-        message: "Notification sent successfully",
+        message: "Notifications saved",
         data: {
           recipients: result.recipients,
+          savedCount: result.recipients,
+          push: result.push,
           notification: { ...data, photo: result.photo },
         },
       });

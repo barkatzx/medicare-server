@@ -7,9 +7,31 @@ export const TITLE_MAX = 150;
 export const MESSAGE_MAX = 2000;
 export const ALLOWED_PHOTO_MIME = ["image/jpeg", "image/png", "image/webp"];
 export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
+export const DEVICE_TOKEN_MAX = 4096;
+export const DEVICE_PLATFORMS = ["android", "ios", "web"] as const;
 
 export const isUuid = (value: unknown): value is string =>
   typeof value === "string" && UUID_REGEX.test(value);
+
+export function validateDeviceTokenBody(body: any) {
+  const token = typeof body?.token === "string" ? body.token.trim() : "";
+  const platform = typeof body?.platform === "string" ? body.platform : "";
+  if (token.length < 20 || token.length > DEVICE_TOKEN_MAX || /\s/.test(token)) {
+    return { error: "token must be a valid FCM registration token" };
+  }
+  if (!(DEVICE_PLATFORMS as readonly string[]).includes(platform)) {
+    return { error: `platform must be one of: ${DEVICE_PLATFORMS.join(", ")}` };
+  }
+  return { data: { token, platform: platform as (typeof DEVICE_PLATFORMS)[number] } };
+}
+
+export function validateDeviceTokenDeleteBody(body: any) {
+  const token = typeof body?.token === "string" ? body.token.trim() : "";
+  if (token.length < 20 || token.length > DEVICE_TOKEN_MAX || /\s/.test(token)) {
+    return { error: "token must be a valid FCM registration token" };
+  }
+  return { data: { token } };
+}
 
 export function parsePagination(query: Record<string, unknown>) {
   const page = Math.max(1, parseInt(String(query.page ?? "1"), 10) || 1);
