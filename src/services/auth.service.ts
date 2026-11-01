@@ -1,6 +1,7 @@
 import { compare, hash } from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/supabase";
+import { NotificationService } from "../notifications/notifications.service";
 import { LoginInput, RegisterInput, UserPayload } from "../types/index";
 
 export class AuthService {
@@ -88,6 +89,12 @@ export class AuthService {
 
     await prisma.cart.create({
       data: { userId: user.id },
+    });
+
+    await NotificationService.notifyAdminsSafely({
+      title: "New Approval Request",
+      message: `An approval request has been submitted by ${user.name || user.pharmacy_name || user.email}.`,
+      type: "approval",
     });
 
     return {

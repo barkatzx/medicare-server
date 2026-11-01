@@ -153,6 +153,89 @@ export class NotificationService {
     return result.count;
   }
 
+  // ---------- Admin inbox ----------
+  // Stored as one row per admin so each admin has independent read state
+  // and customers (who never own these rows) can never retrieve them.
+  static async notifyAdmins(
+    input: { title: string; message: string; type: NotificationType },
+    db: Pick<typeof prisma, "user" | "notification"> = prisma,
+  ) {
+    const admins = await db.user.findMany({
+      where: { role: Role.admin },
+      select: { id: true },
+    });
+    if (admins.length === 0) return [];
+    return db.notification.createManyAndReturn({
+      data: admins.map((a) => ({ userId: a.id, ...input })),
+      select: { id: true, userId: true, title: true, message: true, type: true, photo: true },
+    });
+  }
+
+  // Never throws: admin alerts must not fail the originating request.
+  static async notifyAdminsSafely(input: {
+    title: string;
+    message: string;
+    type: NotificationType;
+  }) {
+    try {
+      const saved = await this.notifyAdmins(input);
+      await this.pushAll(saved);
+    } catch (error) {
+      console.error("Admin notification failed:", error);
+    }
+  }
+
+  static async pushAll(saved: SavedNotificationForPush[]) {
+    for (const n of saved) await this.pushSavedNotification(n);
+  }
+
+  static async listAdmin(
+    adminId: string,
+    page: number,
+    limit: number,
+    unreadOnly = false,
+  ) {
+    const where = { userId: adminId, ...(unreadOnly ? { isRead: false } : {}) };
+    const [total, unreadCount, items] = await Promise.all([
+      prisma.notification.count({ where }),
+      prisma.notification.count({ where: { userId: adminId, isRead: false } }),
+      prisma.notification.findMany({
+        where,
+        select: publicFields,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+    return {
+      items,
+      unreadCount,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      },
+    };
+  }
+
+  static async adminUnreadCount(adminId: string) {
+    return prisma.notification.count({ where: { userId: adminId, isRead: false } });
+  }
+
+  static async markAdminRead(adminId: string, id: string) {
+    const result = await prisma.notification.updateMany({
+      where: { id, userId: adminId },
+      data: { isRead: true },
+    });
+    if (result.count === 0) return null;
+    return prisma.notification.findFirst({
+      where: { id, userId: adminId },
+      select: publicFields,
+    });
+  }
+
   // ---------- Admin ----------
   static async sendToUser(
     userId: string,

@@ -206,6 +206,15 @@ export class OrderController {
 
       await NotificationService.pushSavedNotification(result.notification);
 
+      const orderer = await prisma.user
+        .findUnique({ where: { id: userId }, select: { name: true } })
+        .catch(() => null);
+      await NotificationService.notifyAdminsSafely({
+        title: "New Order",
+        message: `A new order of ${totalAmount}৳ has been submitted by ${orderer?.name || "a customer"}.`,
+        type: "order",
+      });
+
       await invalidateOrderDataCaches();
 
       return res.status(201).json({

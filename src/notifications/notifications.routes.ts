@@ -23,6 +23,19 @@ router.post(
 );
 router.post("/all", authorizeAdmin, photoUpload, NotificationController.sendToAll);
 
+// Admin inbox (declared before "/:id")
+router.get("/admin", authorizeAdmin, NotificationController.getAdminNotifications);
+router.get(
+  "/admin/unread-count",
+  authorizeAdmin,
+  NotificationController.getAdminUnreadCount,
+);
+router.patch(
+  "/admin/:id/read",
+  authorizeAdmin,
+  NotificationController.markAdminNotificationRead,
+);
+
 // ==================== CUSTOMER ROUTES ====================
 // Static paths must be declared before "/:id"
 router.post("/markall", NotificationController.markAllRead);

@@ -60,6 +60,47 @@ export class NotificationController {
     }
   }
 
+  // ---------- Admin notifications (routes guarded by authorizeAdmin) ----------
+  static async getAdminNotifications(req: AuthRequest, res: Response) {
+    try {
+      const { page, limit } = parsePagination(req.query);
+      const unreadOnly = req.query.unread === "true";
+      const { items, pagination, unreadCount } =
+        await NotificationService.listAdmin(req.user!.id, page, limit, unreadOnly);
+      res.json({ success: true, data: items, unreadCount, pagination });
+    } catch (error) {
+      console.error("Get admin notifications error:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  }
+
+  static async getAdminUnreadCount(req: AuthRequest, res: Response) {
+    try {
+      const unreadCount = await NotificationService.adminUnreadCount(req.user!.id);
+      res.json({ success: true, data: { unreadCount } });
+    } catch (error) {
+      console.error("Get admin unread count error:", error);
+      res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+  }
+
+  static async markAdminNotificationRead(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      if (!isUuid(id)) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      const notification = await NotificationService.markAdminRead(req.user!.id, id);
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      res.json({ success: true, data: notification });
+    } catch (error) {
+      console.error("Mark admin notification read error:", error);
+      res.status(500).json({ error: "Failed to update notification" });
+    }
+  }
+
   static async getNotificationById(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
